@@ -1,0 +1,66 @@
+# ============================================================================
+# Wire-Trace Trial - single source of truth for robot + algorithm parameters.
+# Everything marked  # MEASURE  must be checked on the real setup.
+# ============================================================================
+
+robot:
+  base_link: base_link
+  tip_link: end-effector              # flange frame name in HEAL URDF (from starter code)
+  joint_names: [joint1, joint2, joint3, joint4, joint5, joint6]   # order expected by velocity controller
+  joint_state_topic: /joint_states
+  robot_description_topic: /robot_description
+  velocity_command_topic: /velocity_controller/commands
+  # Probe tip relative to the tip_link frame (metres / radians).          # MEASURE
+  # e.g. a ring 12 cm out along the flange z axis -> [0, 0, 0.12]
+  tool_xyz: [0.0, 0.0, 0.0]
+  tool_rpy: [0.0, 0.0, 0.0]
+  rate_hz: 100.0                      # control loop rate (starter code used 100 Hz)
+  joint_state_timeout: 0.1            # s, stop if joint_states go stale
+
+recording:
+  rate_hz: 50.0                       # brief says >= 10-20 Hz, denser is better
+
+contact:
+  topic: /wire_contact                # std_msgs/Bool, published by scripts/contact_monitor.py
+
+processing:
+  min_step: 0.0003
+  ds: 0.001
+  smooth_sigma: 0.003                 # m - increase if teaching was shaky, but watch the deviation warning
+  ori_smooth_sigma: 0.005
+  max_smoothing_dev: 0.0015
+  offset_xyz: [0.0, 0.0, 0.0]         # constant clearance shift (base frame), e.g. [0, 0, 0.002]
+  v_max: 0.05                         # m/s - brief: start 5-10 cm/s, increase gradually
+  a_max: 0.10
+  a_lat_max: 0.10
+  w_max: 0.5
+  profile_smooth: 0.01
+  curvature_sigma: 0.008
+  dt: 0.01
+  trim_start_end: 0.0
+  raw_interp: linear                  # "spline" for sparse teleop waypoints
+
+controller:
+  kp_pos: 3.0
+  kp_ori: 2.0
+  damping: 0.02
+  damping_max: 0.10
+  sigma_thresh: 0.04
+  qdot_max: [0.6, 0.6, 0.6, 0.8, 0.8, 0.8]   # rad/s  (keep <= HEAL limits)  # MEASURE / ask TA
+  qddot_max: 3.0
+  qddot_stop: 3.0
+  speed_scale: 0.1                    # ALWAYS start at 0.1 (10 %) - override with --speed
+  err_soft: 0.0015
+  err_abort: 0.006                    # abort if probe is > 6 mm off the desired path
+  lag_soft: 0.010
+  lag_abort: 0.030
+  ori_err_abort: 0.20
+  k_min: 0.2
+  start_tol: 0.005
+  done_tol: 0.0015
+  settle_time: 1.5
+  joint_margin: 0.05
+  # Cartesian safety box for the probe tip in base_link.                  # MEASURE
+  # Set it a few cm around the wire stand so a bug can never swing the arm far.
+  workspace_min: [-1.0, -1.0, -0.05]
+  workspace_max: [1.0, 1.0, 1.2]
