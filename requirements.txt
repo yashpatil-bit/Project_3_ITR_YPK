@@ -1,0 +1,9 @@
+# Python deps (pip). ROS 2 Humble deps (rclpy, PyKDL, kdl_parser_py, urdf_parser_py) come from the
+# lab workspace / apt - see README "Setup".
+numpy>=1.21
+scipy>=1.8
+matplotlib>=3.5
+pyyaml>=5.4
+pytest>=7
+# optional: Arduino contact sensor (scripts/contact_monitor.py --mode serial)
+# pyserial>=3.5

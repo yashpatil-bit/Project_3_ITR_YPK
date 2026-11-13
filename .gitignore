@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+data/sim/
+# keep real lab data (demos / processed / runs) in git as evidence - but not the fake-robot ones
+data/demos/sim_demo*.npz
+data/runs/pytest*
+data/runs/dry_*
