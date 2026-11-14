@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """REPLAY / EXECUTE phase: track a processed trajectory with DLS-IK joint-velocity control.
 
-Prerequisites (see README): ./heal_server running, velocity controller launched, robot at
+Prerequisites: HEAL launched with the starter README commands (README §2): ./heal_server + the
+velocity_control launch (step 5). Robot at
 the trajectory start (scripts/go_to_start.py). Buddy on the E-stop.
 
     python3 scripts/replay.py data/processed/demo_01_v5.npz --dry-run      # robot does NOT move

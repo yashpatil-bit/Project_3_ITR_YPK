@@ -57,28 +57,69 @@ code runs on (`~/Debojit_WS/addverb_ws`).
   ```
 - Get the code:
   ```bash
-  git clone https://github.com/yashpatil-bit/Project_3_ITR_YPK.git && cd Project_3_ITR_YPK
+  git clone -b claude/sleepy-bohr-jn2txo https://github.com/yashpatil-bit/Project_3_ITR_YPK.git
   ```
-- Every new terminal on the lab PC:
+- Every terminal that runs one of our scripts on the lab PC sources the workspace exactly as
+  the starter README does, then changes into our repo:
   ```bash
-  source /opt/ros/humble/setup.bash && source ~/Debojit_WS/addverb_ws/install/setup.bash
+  cd Debojit_WS/addverb_ws/
+  source install/setup.bash
+  cd ~/Project_3_ITR_YPK
   ```
 
 **Your own laptop (no robot, no ROS):** `pip3 install -r requirements.txt` is enough for
 processing, plotting, the simulator, the tests and `tools/fake_robot.py`.
 
-### Robot bring-up (from the course instructions, `starter_code/LAB_COMMANDS.md`)
-```text
-T1: ssh cobot@192.168.1.25
-    cd /home/cobot/addverb_images/gripper_fix_2026-09-08/
-    sudo env HOME=/home/cobot ./cobot run      -> type 1, Enter
-    ./heal_server     (position/velocity control)   OR
-    ./free_drive      (gravity compensation, move by hand)   OR
-    ./base_rigid      (go home)
-T2 (only with heal_server running):
-    cd ~/Debojit_WS/addverb_ws && source install/setup.bash
-    ros2 launch addverb_cobot_control velocity_control.launch.py
-```
+### Launching HEAL: only the starter README commands
+
+HEAL is launched **only** with the commands from the starter README
+(`starter_code/LAB_COMMANDS.md`), unchanged. None of our scripts start, stop or reconfigure
+anything on the robot side. They only read `/joint_states` and `/robot_description` and publish
+on `/velocity_controller/commands`.
+
+1. Open a terminal and run (password: `cobot`):
+   ```bash
+   ssh cobot@192.168.1.25
+   ```
+2. Then run:
+   ```bash
+   cd /home/cobot/addverb_images/gripper_fix_2026-09-08/
+   ```
+   ```bash
+   sudo env HOME=/home/cobot ./cobot run
+   ```
+   (password: `cobot`)
+3. Type `1` and press ENTER.
+4. Now run **one** of:
+   ```bash
+   ./heal_server
+   ```
+   ```bash
+   ./base_rigid
+   ```
+   ```bash
+   ./free_drive
+   ```
+   - `./heal_server` for our replay, go_to_start, teleop and gripper scripts.
+   - `./base_rigid` to go home.
+   - `./free_drive` to move the robot by hand. Use it for teaching and capture_points.
+5. Open a fresh terminal (**only when `./heal_server` is running**) and run:
+   ```bash
+   cd Debojit_WS/addverb_ws/
+   source install/setup.bash
+   ```
+   ```bash
+   ros2 launch addverb_cobot_control velocity_control.launch.py
+   ```
+
+**Switching modes** (e.g. `./free_drive` for teaching → `./heal_server` for replay):
+- Stop the step-5 launch first with Ctrl-C (it only belongs with `./heal_server`).
+- Stop the running step-4 program with Ctrl-C.
+- Start the other step-4 program.
+- If you are now on `./heal_server`, repeat step 5.
+
+Ask the TA to confirm this is the intended way to switch. The starter README lists the step-4
+programs as alternatives but doesn't say how to change between them.
 
 ### First-time configuration (`config/heal_wire_trace.yaml`, lines marked `# MEASURE`)
 1. `python3 scripts/check_setup.py` checks that topics, URDF, KDL chain, joint names, limits and
@@ -95,7 +136,7 @@ T2 (only with heal_server running):
 
 ## 3. Teaching phase (record waypoints)
 
-1. T1: `./free_drive` (gravity compensation). The buddy holds the E-stop.
+1. HEAL launched with `./free_drive` (step 4 of §2 "Launching HEAL"), with no step-5 launch. The buddy holds the E-stop.
 2. Check that joint states still arrive: `python3 scripts/check_setup.py --watch` (the pose must
    change when you move the arm by hand).
 3. Record:
@@ -142,7 +183,7 @@ rviz2     # Fixed frame base_link; add Path topics /wire_trace/planned and /wire
 
 ## 5. Replay phase (DLS-IK execution)
 
-T1: `./heal_server`, T2: velocity controller launched (see bring-up).
+HEAL launched with `./heal_server` (step 4) plus the velocity controller (step 5); see §2 "Launching HEAL".
 ```bash
 python3 scripts/go_to_start.py data/processed/demo_01_v10.npz        # small corrections only (< 2 cm, ring is threaded on the wire)
 python3 scripts/replay.py data/processed/demo_01_v10.npz --dry-run   # virtual robot, nothing moves

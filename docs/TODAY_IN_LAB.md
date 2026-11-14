@@ -17,11 +17,14 @@ Roles: **Operator** at the keyboard, **Buddy** with a hand on the E-stop at all 
 
 ## 1. Software and robot up (15 min)
 ```bash
-git clone -b claude/sleepy-bohr-jn2txo https://github.com/yashpatil-bit/Project_3_ITR_YPK.git   # or: git pull
+git clone -b claude/sleepy-bohr-jn2txo https://github.com/yashpatil-bit/Project_3_ITR_YPK.git
 cd Project_3_ITR_YPK && pip3 install -r requirements.txt && python3 -m pytest -q
 ```
-Start the robot (README "Robot bring-up") with `./heal_server` and launch the velocity controller.
-In a new terminal, source ROS and the workspace, then:
+(If you already cloned it: `git pull`.)
+Launch HEAL with **only** the starter README commands (README §2 "Launching HEAL"):
+ssh, then `cobot run`, type `1`, `./heal_server` (step 4), then the velocity controller (step 5).
+In another fresh terminal, source the workspace like step 5 (`cd Debojit_WS/addverb_ws/`,
+`source install/setup.bash`), `cd ~/Project_3_ITR_YPK`, then:
 ```bash
 python3 scripts/check_setup.py
 ```
@@ -41,7 +44,8 @@ order and directions are right. If the arm moves in an unexpected way, **E-stop*
 velocity controller's joint order (`ros2 param get /velocity_controller joints`) against
 `robot.joint_names` in the config.
 
-Also test free-drive: stop `heal_server`, run `./free_drive`, then
+Also test free-drive: switch modes as in README §2 (stop step 5, stop `./heal_server`, run
+`./free_drive`), then
 `python3 scripts/check_setup.py --watch` and move the arm by hand.
 **If the pose changes, teaching by hand works.** If it times out, tell the TA and me; the
 fallback is keyboard teaching (`teleop_teach.py`).
@@ -62,7 +66,8 @@ put back in exactly the same place (repeatability).
    - The handle should point **straight out of the gripper** along the tool axis, and
      **perpendicular to the wire plane**.
    - Grip in the middle of the handle. Wrap tape there first if it's thin, and mark the spot.
-3. Stop `./free_drive`, start `./heal_server` (the robot now holds its pose), then:
+3. Switch modes as in README §2: stop `./free_drive`, run `./heal_server`, then step 5. The
+   robot now holds its pose. Then:
    ```bash
    python3 scripts/gripper.py close --force 60
    ```
@@ -77,8 +82,10 @@ put back in exactly the same place (repeatability).
 
 ## 5. Teach (20 min). The quality of the demo decides everything
 ```bash
-./free_drive                                   # robot terminal
-python3 scripts/record_demo.py --name demo_01  # our terminal
+# robot terminal (step 4 of the starter README), no step-5 launch in free-drive:
+./free_drive
+# our terminal:
+python3 scripts/record_demo.py --name demo_01
 ```
 - Press Enter, then guide the probe from the start to the end of the wire.
   - Go slowly (2–3 cm/s) and keep the wire in the **middle of the round part** of the ring.
@@ -97,7 +104,8 @@ The default `w_max: 0.5 rad/s` makes each U-bend take about 6 s. That's slow, bu
 first runs.
 
 ## 7. First autonomous runs
-Switch to `./heal_server` and launch the velocity controller. The robot is now wherever the last
+Switch modes as in README §2: stop `./free_drive`, run `./heal_server`, then step 5. The robot is
+now wherever the last
 demo ended. Run the contact monitor in its own terminal:
 ```bash
 python3 scripts/contact_monitor.py --mode keyboard        # press Enter whenever the buzzer sounds

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """FALLBACK teach mode: jog the probe with the keyboard (DLS-IK Cartesian velocity) and
 save waypoints. Use this if /joint_states is NOT available while ./free_drive runs, or to
-add careful waypoints in the tightest bends. Needs ./heal_server + velocity controller.
+add careful waypoints in the tightest bends. Needs ./heal_server + the step-5 velocity_control launch (README §2).
 
 Keys (no Enter needed; motion only while a key is held / repeating = dead-man):
    w/s : +x/-x     a/d : +y/-y     r/f : +z/-z      (base_link axes)
