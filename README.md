@@ -29,6 +29,7 @@ flowchart LR
 
 | Path | What it is |
 |---|---|
+| `INSTRUCTIONS.md` | **Complete guide: setup, launching HEAL, step-by-step lab procedure, every command and option** |
 | `config/heal_wire_trace.yaml` | **Every parameter** in one place: frames, topics, tool offset, speeds, gains, safety limits |
 | `wire_trace/` | Library: `trajectory.py` (processing), `controller.py` (DLS-IK tracker and safety), `learning.py` (DMP, ILC, registration), `kdl_kinematics.py` (URDF → KDL FK/Jacobian plus probe offset), `ros_common.py`, `runlog.py`, `plotting.py`, `so3.py` |
 | `scripts/` | Things you run in the lab (all take `-h`) |
