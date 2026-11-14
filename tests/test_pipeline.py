@@ -190,6 +190,29 @@ def test_scripts_with_fake_robot(tmp_path):
         "--alat", "0.4", "--out", out_traj, "--no-plot")
     out = run("tools/fake_robot.py", "scripts/replay.py", out_traj, "--yes", "--tag", "pytest_refuse")
     assert "go_to_start" in out
-    run("tools/fake_robot.py", "scripts/go_to_start.py", out_traj, "--yes")
+    run("tools/fake_robot.py", "scripts/go_to_start.py", out_traj, "--yes", "--max-dist", "0.5")
     out = run("tools/fake_robot.py", "scripts/replay.py", out_traj, "--speed", "1.0", "--yes", "--tag", "pytest")
     assert "status   : DONE" in out
+
+
+# ---------------------------------------------------------------- lab wire geometry (U-bends, ring roll)
+def test_large_rotation_smoothing():
+    from wire_trace.so3 import smooth_quaternions
+    ang = np.radians(np.linspace(0, 540, 600))
+    base = quat_exp(np.array([0, 0.3, 0]))
+    qs = np.array([quat_mul(quat_exp(np.array([a, 0, 0])), base) for a in ang])
+    sm = smooth_quaternions(qs, 5.0)
+    err = max(np.linalg.norm(quat_error(a, b)) for a, b in zip(qs, sm))
+    assert np.degrees(err) < 1.0
+
+
+def test_serpentine_ring_roll():
+    from wire_trace.synthetic import ring_demo
+    d, wire = ring_demo(SimArm(noise=1e-5))
+    tr = process_demo(d, ProcessParams(v_max=0.08, a_max=0.2, a_lat_max=0.2, w_max=1.0), verbose=False)
+    arm = SimArm(noise=1e-5, lag=0.03)
+    place_at_start(arm, tr)
+    log, status, reason = simulate(tr, arm, ControllerParams(speed_scale=1.0, qdot_max=(1.0, 1.0, 1.0, 1.5, 1.5, 2.0)))
+    a = log.arrays()
+    assert status == "done", reason
+    assert a["e_pos"].max() < 0.002 and np.degrees(a["e_ori"].max()) < 8.0

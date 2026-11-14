@@ -5,9 +5,9 @@ Phase 1: quintic joint-space move from the current joints to the joint configura
          that was recorded at the start of the demo (same IK branch as the demo).
 Phase 2: short Cartesian DLS alignment so the probe sits exactly on the trajectory start.
 
-!! Joint-space motion does NOT know where the wire is. Before running, put the probe
-!! close to the start by hand (free-drive) or make sure the straight-ish joint motion is
-!! clear of the wire stand. Buddy keeps a hand on the E-stop.
+!! The probe ring is THREADED on the wire. Joint-space motion does not know where the wire
+!! is, so this script refuses moves longer than --max-dist (2 cm): it is only for small
+!! corrections. To get from the end back to the start, use  replay.py <traj> --reverse.
 
     python3 scripts/go_to_start.py data/processed/demo_01_v5.npz
     python3 scripts/go_to_start.py data/processed/demo_01_v5.npz --end    # go to the END (before a --reverse run)
@@ -36,6 +36,10 @@ def main():
     ap.add_argument("--config", default=None)
     ap.add_argument("--urdf", default=None)
     ap.add_argument("--yes", action="store_true")
+    ap.add_argument("--max-dist", type=float, default=0.02,
+                    help="refuse if the probe is further than this [m] from the target. The ring is threaded "
+                         "on the wire, so a long joint-space move would drag it through the wire. Use "
+                         "replay.py --reverse to get back to the start instead. Raise only with the probe OFF the wire.")
     a = ap.parse_args()
     cfg = load_config(a.config)
     traj = Trajectory.load(a.traj)
@@ -58,6 +62,10 @@ def main():
         T = max(3.0, 1.875 * float(np.max(np.abs(dq))) / a.max_joint_speed)
         print(f"Joint change [deg]: {np.round(np.degrees(dq), 1)}")
         print(f"Tool moves {np.linalg.norm(p_goal - p0)*100:.1f} cm (straight-line distance) in {T:.1f} s")
+        if np.linalg.norm(p_goal - p0) > a.max_dist:
+            raise RuntimeError(f"probe is {np.linalg.norm(p_goal - p0)*100:.1f} cm from the target (> --max-dist "
+                               f"{a.max_dist*100:.0f} cm). With the ring on the wire use 'replay.py --reverse' / a forward "
+                               "run to move along the wire, or free-drive closer. Only raise --max-dist with the probe off the wire.")
         if np.any(q_goal < io.kin.lower) or np.any(q_goal > io.kin.upper):
             raise RuntimeError("goal joint configuration outside URDF limits")
         if not a.yes and not confirm("Path clear of the wire? Buddy on E-stop? [Enter = go, n = cancel] "):

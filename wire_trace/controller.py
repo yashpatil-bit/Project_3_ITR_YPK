@@ -43,6 +43,7 @@ class ControllerParams:
     lag_soft: float = 0.010        # m   along-path lag tolerated before slowing the reference
     lag_abort: float = 0.030       # m   abort if the robot lags the reference by more than this
     ori_err_abort: float = 0.20    # rad abort above this orientation error
+    ori_err_soft: float = 0.05     # rad start slowing the reference above this orientation error
     k_min: float = 0.2             # minimum reference-speed factor when slowing down
     start_tol: float = 0.005       # m   must be this close to the start pose to begin
     done_tol: float = 0.0015       # m   final position tolerance
@@ -156,6 +157,9 @@ class TrackingController:
             k = float(np.clip(k, p.k_min, 1.0))
         else:
             k = 1.0
+        if eon > p.ori_err_soft:            # also wait for the wrist (ring roll in the U-bends)
+            k_o = 1.0 - (eon - p.ori_err_soft) / max(p.ori_err_abort - p.ori_err_soft, 1e-9)
+            k = float(np.clip(min(k, k_o), p.k_min, 1.0))
         info["k"] = k
         ff = k * p.speed_scale if self.tau < T else 0.0
 

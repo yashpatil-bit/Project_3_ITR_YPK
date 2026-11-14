@@ -38,6 +38,7 @@ flowchart LR
 | `hardware/buzz_contact/` | Optional Arduino sketch that reads the buzz-wire circuit as an objective contact sensor |
 | `starter_code/` | The course starter code, unchanged except for one bug fix (`ee_pose_topic` subscription was missing its topic argument) |
 | `docs/LAB_PLAYBOOK.md` | Session-by-session plan for the physical work, with troubleshooting |
+| `docs/TODAY_IN_LAB.md` | **Step-by-step procedure for our actual setup** (threaded ring probe, U-bend wire, 2-finger gripper) |
 | `data/demos, processed, runs` | Recorded demos, processed trajectories and run logs (commit the real ones as evidence) |
 
 ---
@@ -143,7 +144,7 @@ rviz2     # Fixed frame base_link; add Path topics /wire_trace/planned and /wire
 
 T1: `./heal_server`, T2: velocity controller launched (see bring-up).
 ```bash
-python3 scripts/go_to_start.py data/processed/demo_01_v10.npz        # quintic joint move + Cartesian alignment
+python3 scripts/go_to_start.py data/processed/demo_01_v10.npz        # small corrections only (< 2 cm, ring is threaded on the wire)
 python3 scripts/replay.py data/processed/demo_01_v10.npz --dry-run   # virtual robot, nothing moves
 python3 scripts/replay.py data/processed/demo_01_v10.npz --speed 0.1 # ALWAYS 10 % first
 python3 scripts/replay.py data/processed/demo_01_v10.npz --speed 0.2 ...0.5 ...1.0
@@ -196,9 +197,9 @@ runs), which writes `data/runs/summary.md`:
 python3 scripts/evaluate_runs.py --tag final
 ```
 
-**Final demo protocol:** run `go_to_start`, then
-`replay.py <best>.npz --speed <best> --tag final`. Do this 3 times (`--reverse` or
-`go_to_start` in between), then run `evaluate_runs.py --tag final`.
+**Final demo protocol:** `replay.py <best>.npz --speed <best> --tag final`, then
+`replay.py <best>.npz --reverse` to return along the wire. Do this 3 times, then run
+`evaluate_runs.py --tag final`.
 
 ## 7. Stage 2 — learning (bonus)
 
@@ -237,7 +238,7 @@ python3 -m pytest -q                                   # 15 tests
 python3 scripts/simulate_replay.py --vmax 0.15 --ilc 3 # whole pipeline, plots in data/sim/
 python3 tools/fake_robot.py --make-demo                # synthetic demo -> data/demos/sim_demo.npz
 python3 scripts/process_demo.py data/demos/sim_demo.npz --vmax 0.1
-python3 tools/fake_robot.py scripts/go_to_start.py data/processed/sim_demo_v10.npz --yes
+python3 tools/fake_robot.py scripts/go_to_start.py data/processed/sim_demo_v10.npz --yes --max-dist 0.5
 python3 tools/fake_robot.py scripts/replay.py data/processed/sim_demo_v10.npz --speed 0.5 --yes
 ```
 The simulated arm uses UR5-like kinematics, not HEAL. It only proves that the software chain
