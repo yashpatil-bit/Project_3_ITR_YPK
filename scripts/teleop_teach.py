@@ -52,9 +52,12 @@ def main():
     T, Q, P, R = [], [], [], []
     t0 = time.monotonic()
     key_t, key = 0.0, None
+    last_print = 0.0
     old = termios.tcgetattr(sys.stdin)
     save = True
     print(__doc__)
+    p0, _ = io.kin.fk(io.q())
+    print(f"START tool tip x={p0[0]:+.3f} y={p0[1]:+.3f} z={p0[2]:+.3f} m   jog speed {speeds[si]*100:.1f} cm/s")
     try:
         tty.setcbreak(sys.stdin.fileno())
         while rclpy.ok():
@@ -85,6 +88,11 @@ def main():
                 elif key in ANG:
                     ax, sg = ANG[key]; twist[3 + ax] = sg * speeds[si] * 5.0
             q = io.q()
+            now = time.monotonic()
+            if np.any(twist) and now - last_print > 0.5:
+                last_print = now
+                p_now, _ = io.kin.fk(q)
+                print(f"  key '{key}'  tool tip x={p_now[0]:+.3f} y={p_now[1]:+.3f} z={p_now[2]:+.3f} m")
             cmd, _, _ = dls(io.kin.jacobian(q), twist, 0.02, 0.1, 0.04)
             cmd = limit_qdot(cmd, last, qdot_max, 1.0 * dt)
             last = cmd
@@ -95,6 +103,11 @@ def main():
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old)
         io.publish_zero(10)
+        try:
+            p1, _ = io.kin.fk(io.q())
+            print(f"END   tool tip x={p1[0]:+.3f} y={p1[1]:+.3f} z={p1[2]:+.3f} m")
+        except Exception:
+            pass
         if save and len(P) >= 4:
             path = data_dir("demos", a.name + ".npz")
             Demo(t=np.array(T), q=np.array(Q), pos=np.array(P), quat=np.array(R),
