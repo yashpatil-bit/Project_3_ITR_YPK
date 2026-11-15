@@ -18,7 +18,7 @@ Roles: **Operator** at the keyboard, **Buddy** with a hand on the E-stop at all 
 ## 1. Software and robot up (15 min)
 ```bash
 mkdir -p ~/ITR_2026/Grp8/final && cd ~/ITR_2026/Grp8/final && git clone -b claude/sleepy-bohr-jn2txo https://github.com/yashpatil-bit/Project_3_ITR_YPK.git
-cd ~/ITR_2026/Grp8/final/Project_3_ITR_YPK && pip3 install -r requirements.txt && python3 -m pytest -q
+cd ~/ITR_2026/Grp8/final/Project_3_ITR_YPK && pip3 install -r requirements.txt && ./run_tests.sh
 ```
 (If you already cloned it: `git pull`.)
 Launch HEAL with **only** the starter README commands (README §2 "Launching HEAL"):

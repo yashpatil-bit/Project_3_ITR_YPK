@@ -35,7 +35,7 @@ flowchart LR
 | `scripts/` | Things you run in the lab (all take `-h`) |
 | `stage2/` | Bonus: `learn_dmp.py`, `ilc_update.py`, `register_stand.py` |
 | `tools/fake_robot.py` | Runs any script against a **simulated arm with no ROS installed**, for rehearsing at home |
-| `tests/` | `python3 -m pytest -q` (15 tests, including an end-to-end run of the real scripts on the fake robot) |
+| `tests/` | `./run_tests.sh` (17 tests, including an end-to-end run of the real scripts on the fake robot) |
 | `hardware/buzz_contact/` | Optional Arduino sketch that reads the buzz-wire circuit as an objective contact sensor |
 | `starter_code/` | The course starter code, unchanged except for one bug fix (`ee_pose_topic` subscription was missing its topic argument) |
 | `docs/LAB_PLAYBOOK.md` | Session-by-session plan for the physical work, with troubleshooting |
@@ -276,7 +276,7 @@ learned trajectory.
 ## 8. Rehearse at home (no robot, no ROS)
 
 ```bash
-python3 -m pytest -q                                   # 15 tests
+./run_tests.sh                                         # 17 tests
 python3 scripts/simulate_replay.py --vmax 0.15 --ilc 3 # whole pipeline, plots in data/sim/
 python3 tools/fake_robot.py --make-demo                # synthetic demo -> data/demos/sim_demo.npz
 python3 scripts/process_demo.py data/demos/sim_demo.npz --vmax 0.1

@@ -59,7 +59,7 @@ smooth, and repeatable 3 times. Bonus (Stage 2): the robot learns to do it bette
 | `stage2/` | Bonus learning scripts (ILC, DMP, stand registration) |
 | `wire_trace/` | The library the scripts use (math, controller, processing). You normally don't edit it |
 | `tools/fake_robot.py` | Runs our scripts against a simulated robot, for practice at home |
-| `tests/` | Automatic tests (`python3 -m pytest -q`) |
+| `tests/` | Automatic tests (`./run_tests.sh`) |
 | `hardware/buzz_contact/` | Optional Arduino sketch for automatic contact detection |
 | `starter_code/` | The course starter code (`LAB_COMMANDS.md` = the official HEAL launch commands) |
 | `data/demos/` | Recorded demonstrations (`.npz`) |
@@ -80,9 +80,16 @@ mkdir -p ~/ITR_2026/Grp8/final && cd ~/ITR_2026/Grp8/final && git clone -b claud
 cd ~/ITR_2026/Grp8/final/Project_3_ITR_YPK && pip3 install -r requirements.txt
 ```
 ```bash
-python3 -m pytest -q
+./run_tests.sh
 ```
-This must end with `17 passed`. If you already cloned it, update it with:
+This must end with `17 passed`.
+
+> Use `./run_tests.sh`, not plain `python3 -m pytest`. ROS Humble's `launch_testing` pytest
+> plugin crashes with newer pytest versions ("Error while loading plugin pytest11"), and the
+> script switches plugin loading off. Don't `pip3 install pytest` on the shared lab PC. If you
+> did, undo it with `pip3 uninstall -y pytest` after testing.
+
+If you already cloned it, update it with:
 ```bash
 cd ~/ITR_2026/Grp8/final/Project_3_ITR_YPK && git fetch origin && git checkout claude/sleepy-bohr-jn2txo && git pull
 ```
@@ -164,7 +171,7 @@ Roles at all times: an **Operator** at the keyboard and a **Buddy** with a hand 
 E-stop.
 
 ### Step 1: Code ready (15 min)
-Do B1. ✅ `17 passed`.
+Do B1. ✅ `./run_tests.sh` prints `17 passed`.
 
 ### Step 2: Launch HEAL (10 min)
 Run B3 steps 1–4 with `./heal_server` in T1, then step 5 in T2.
@@ -679,7 +686,8 @@ Edit it with any text editor. Values are in metres, radians and seconds.
 
 | Problem | Fix |
 |---|---|
-| `pytest` fails / `ModuleNotFoundError` | `pip3 install -r requirements.txt`; make sure you are inside `~/ITR_2026/Grp8/final/Project_3_ITR_YPK` |
+| `Error while loading plugin "pytest11"` (launch_testing) | Use `./run_tests.sh` instead of `python3 -m pytest` |
+| `ModuleNotFoundError` | `pip3 install -r requirements.txt`; make sure you are inside `~/ITR_2026/Grp8/final/Project_3_ITR_YPK` |
 | `Timed out waiting for: URDF` | Velocity controller (T2) not running, or the topic name differs: check `ros2 topic list`. Or save the URDF and use `--urdf file.urdf` |
 | `Timed out waiting for: JointState` | Robot program not running, or the terminal wasn't sourced (B2) |
 | `KDL chain has 0 joints` | Wrong `robot.tip_link`; check `ros2 run tf2_tools view_frames` |
@@ -701,7 +709,7 @@ Edit it with any text editor. Values are in metres, radians and seconds.
 No ROS is needed. `tools/fake_robot.py` runs the same scripts against a simulated arm. It has
 generic kinematics, not HEAL's.
 ```bash
-python3 -m pytest -q
+./run_tests.sh
 ```
 ```bash
 python3 scripts/simulate_replay.py --vmax 0.15 --ilc 3

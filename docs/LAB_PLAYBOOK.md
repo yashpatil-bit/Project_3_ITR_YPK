@@ -10,7 +10,7 @@ probe), and, if there are three of you, a **Recorder** (writes notes and films).
 ---
 
 ## Before the first session (at home, about 1 h)
-- `pip3 install -r requirements.txt && python3 -m pytest -q`, which should end with `15 passed`.
+- `pip3 install -r requirements.txt && ./run_tests.sh`, which should end with `17 passed`.
 - Run the fake-robot rehearsal from README §8 so everyone has typed every command once.
 - Bring: a ruler or caliper, tape, a laptop with the repo, and a phone for video.
 - Prepare the questions for the TA (bottom of this page).
