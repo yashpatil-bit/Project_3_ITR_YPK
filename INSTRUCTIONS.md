@@ -213,8 +213,8 @@ Switch modes (B4) to `./free_drive`, then in T3:
 python3 scripts/check_setup.py --watch
 ```
 Move the arm by hand. ✅ The printed pose changes as you move.
-If it says "Timed out waiting for JointState", tell the TA. The fallback is keyboard teaching
-with `teleop_teach.py` under `./heal_server` (see D7).
+**Our lab result:** it timed out (free-drive publishes nothing to ROS), so we teach with the
+keyboard (Step 8). Free-drive is still useful for moving the arm roughly into place.
 
 ### Step 6: Place the wire box (15 min)
 - Ask the TA before moving it.
@@ -247,22 +247,43 @@ with `teleop_teach.py` under `./heal_server` (see D7).
 
 ✅ The probe is held firmly and `tool_xyz` is set.
 
-### Step 8: Teach (30–40 min)
-1. Switch modes (B4) to `./free_drive`, with T2 stopped.
+### Step 8: Teach (30–60 min)
+
+> **Lab finding:** `./free_drive` does **not** publish `/joint_states` to ROS. Recording while
+> moving the arm by hand is therefore not possible (unless the TA gives another way). We teach
+> with the **keyboard** under `./heal_server`; `free_drive` is only used to move the arm roughly
+> into place, without recording.
+
+1. HEAL on `./heal_server` and T2 running. The probe is in the gripper, with the ring at the
+   start of the wire (Step 7). Buzzer ON. Buddy on the E-stop.
 2. In T3:
    ```bash
-   python3 scripts/record_demo.py --name demo_01
+   python3 scripts/teleop_teach.py --name demo_01
    ```
-3. Press **Enter** to start, then guide the probe from the start to the end of the wire.
-   - Go slowly, about 2–3 cm/s. The script prints your speed and warns above 10 cm/s.
-   - Keep the wire in the **middle of the round part** of the ring.
-   - In every U-bend, slow down and roll the wrist so the ring stays perpendicular to the wire.
-4. Press **Enter** at the end, then keep the arm still.
-5. If the buzzer sounded, record again, because replay copies the demo exactly.
-6. Make 2–3 demos (`demo_02`, `demo_03`). Between demos, guide the arm back to the start by
-   hand; that part is not recorded.
+3. Every key **tap moves one exact step**; holding a key keeps stepping slowly. The default step
+   is 1 mm / 2°. `1`/`2` change it: 0.5 / 1 / 2 / 5 mm and 1 / 2 / 5 / 10°.
 
-✅ `data/demos/demo_01.npz` exists, recorded without a buzz.
+   | Keys | Motion |
+   |---|---|
+   | `w`/`s`, `a`/`d`, `r`/`f` | ±x, ±y, ±z (base axes) |
+   | `n`/`m` | **Roll the ring about the gripper axis** (needed in every U-bend) |
+   | `i`/`k`, `j`/`l`, `u`/`o` | Rotate about base x, y, z (small orientation fixes) |
+   | `c` | **Start/stop recording** (20 Hz) |
+   | `h` | Hold: cancel pending steps |
+   | `q` | Save and quit |
+   | `x` | Quit without saving |
+
+4. Press `c` to start recording, then step the ring along the whole wire to the end.
+   - Keep the wire in the middle of the round part of the ring.
+   - Use `2` (2 mm) on straight parts and `1` (0.5–1 mm) near the bends.
+   - In each U-bend, alternate small moves with `n`/`m` roll steps so the ring stays
+     perpendicular to the wire.
+   - If the buzzer sounds, back off a step and continue more carefully. Note where it happened.
+5. Press `c` to stop recording at the end, then `q` to save. The robot stays at the end of the
+   wire.
+
+✅ `Saved ... samples -> data/demos/demo_01.npz` and no buzz while recording. One good demo is
+enough; the replay is planned from it.
 
 ### Step 9: Process (10 min)
 ```bash
@@ -495,24 +516,18 @@ python3 scripts/replay.py data/processed/demo_01_v5.npz --reverse --speed 0.3
 python3 scripts/replay.py data/processed/demo_01_v8.npz --speed 1.0 --tag final
 ```
 
-### D7. `scripts/teleop_teach.py`: keyboard jog (sanity test, or fallback teaching)
+### D7. `scripts/teleop_teach.py`: keyboard teaching (our main teaching tool)
 - **Robot mode:** `./heal_server` and T2.
-- **Keys** (no Enter needed; the arm moves only while a key is held):
-
-| Keys | Action |
-|---|---|
-| `w`/`s`, `a`/`d`, `r`/`f` | ±x, ±y, ±z |
-| `i`/`k`, `j`/`l`, `u`/`o` | Rotate about x, y, z |
-| `1` / `2` | Slower / faster |
-| SPACE | Save waypoint |
-| `q` | Save and quit |
-| `x` | Quit without saving |
-
-- **Output:** `data/demos/<name>.npz` with the waypoints. To process sparse waypoints, set
-  `processing.raw_interp: spline` in the config first.
+- **How it moves:** each key tap moves the gripper tool point by one exact step, using DLS-IK to
+  a target pose. Holding a key keeps stepping. The target never runs more than 2 steps ahead, so
+  the arm stops right after you let go.
+- **Keys:** see the table in Step 8. `c` toggles continuous 20 Hz recording; SPACE adds a single
+  waypoint.
+- **Output:** `data/demos/<name>.npz`. Process it like any demo. If you used only a few
+  SPACE waypoints, use `--interp spline` with process_demo.
 
 ```bash
-python3 scripts/teleop_teach.py --name teleop_01
+python3 scripts/teleop_teach.py --name demo_01
 ```
 
 ### D8. `scripts/contact_monitor.py`: log contacts (run in T4)

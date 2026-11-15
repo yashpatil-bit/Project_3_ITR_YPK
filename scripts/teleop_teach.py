@@ -1,16 +1,23 @@
 #!/usr/bin/env python3
-"""FALLBACK teach mode: jog the probe with the keyboard (DLS-IK Cartesian velocity) and
-save waypoints. Use this if /joint_states is NOT available while ./free_drive runs, or to
-add careful waypoints in the tightest bends. Needs ./heal_server + the step-5 velocity_control launch (README §2).
+"""KEYBOARD TEACH mode (used because ./free_drive does not publish /joint_states to ROS).
 
-Keys (no Enter needed; motion only while a key is held / repeating = dead-man):
-   w/s : +x/-x     a/d : +y/-y     r/f : +z/-z      (base_link axes)
-   i/k : rotate about x  j/l : about y  u/o : about z
-   1/2 : slower/faster jog speed
-   SPACE : save waypoint      q : save + quit      x : quit without saving
+Needs ./heal_server + the step-5 velocity_control launch (starter README / INSTRUCTIONS B3).
 
-Waypoints are saved as a Demo (data/demos/<name>.npz); process them with
-    python3 scripts/process_demo.py data/demos/<name>.npz   (set processing.raw_interp: spline)
+Every key TAP moves a small exact STEP (the robot drives to a target pose with DLS-IK).
+Holding a key keeps stepping; the target is never allowed to run more than 2 steps ahead
+of the robot, so the arm stops within ~2 steps after you let go.
+
+   Position (base_link axes)      w/s : +x/-x    a/d : +y/-y    r/f : +z/-z
+   Rotation about base axes       i/k : x        j/l : y        u/o : z
+   ROLL about the gripper axis    n/m : (this is the ring roll in the U-bends)
+   1/2 : smaller/bigger steps     (0.5 / 1 / 2 / 5 mm  and  1 / 2 / 5 / 10 deg)
+   c   : start/stop continuous RECORDING (20 Hz)  -> use this to teach the whole wire
+   SPACE : add a single waypoint
+   h   : hold (cancel pending steps, stop where you are)
+   q   : save + quit      x : quit WITHOUT saving
+
+Saved as data/demos/<name>.npz. Then:
+    python3 scripts/process_demo.py data/demos/<name>.npz
 """
 import argparse
 import select
@@ -27,10 +34,14 @@ from rclpy.node import Node
 from wire_trace.config import data_dir, load_config
 from wire_trace.controller import dls, limit_qdot
 from wire_trace.ros_common import RobotIO
+from wire_trace.so3 import quat_error, quat_exp, quat_mul, quat_normalize, quat_to_rotmat
 from wire_trace.trajectory import Demo
 
 LIN = {"w": (0, 1), "s": (0, -1), "a": (1, 1), "d": (1, -1), "r": (2, 1), "f": (2, -1)}
 ANG = {"i": (0, 1), "k": (0, -1), "j": (1, 1), "l": (1, -1), "u": (2, 1), "o": (2, -1)}
+ROLL = {"n": 1, "m": -1}
+STEP_MM = [0.5, 1.0, 2.0, 5.0]
+STEP_DEG = [1.0, 2.0, 5.0, 10.0]
 
 
 def main():
@@ -45,60 +56,91 @@ def main():
     io = RobotIO(node, cfg)
     io.wait_ready(urdf_file=a.urdf)
     dt = 1.0 / float(cfg["robot"]["rate_hz"])
-    speeds = [0.002, 0.005, 0.01, 0.02]   # m/s
     si = 1
+    kp_lin, kp_ang = 3.0, 3.0
+    v_cap, w_cap = 0.02, 0.4                  # m/s, rad/s
     last = np.zeros(io.kin.n)
-    qdot_max = np.full(io.kin.n, 0.3)
+    qdot_max = np.full(io.kin.n, 0.4)
     T, Q, P, R = [], [], [], []
     t0 = time.monotonic()
-    key_t, key = 0.0, None
+    recording = False
+    last_rec = 0.0
     last_print = 0.0
     old = termios.tcgetattr(sys.stdin)
     save = True
     print(__doc__)
-    p0, _ = io.kin.fk(io.q())
-    print(f"START tool tip x={p0[0]:+.3f} y={p0[1]:+.3f} z={p0[2]:+.3f} m   jog speed {speeds[si]*100:.1f} cm/s")
+    p_t, q_t = io.kin.fk(io.q())               # target pose = current pose
+    print(f"START tool tip x={p_t[0]:+.3f} y={p_t[1]:+.3f} z={p_t[2]:+.3f} m   step {STEP_MM[si]} mm / {STEP_DEG[si]} deg")
+
+    def record(now):
+        q = io.q()
+        p, qq = io.kin.fk(q)
+        T.append(now - t0); Q.append(q); P.append(p); R.append(qq)
+
     try:
         tty.setcbreak(sys.stdin.fileno())
         while rclpy.ok():
             rclpy.spin_once(node, timeout_sec=0.0)
-            if select.select([sys.stdin], [], [], 0)[0]:
+            if io.stale():
+                print("joint_states stale -> stop")
+                break
+            q = io.q()
+            p, qq = io.kin.fk(q)
+            now = time.monotonic()
+            while select.select([sys.stdin], [], [], 0)[0]:
                 c = sys.stdin.read(1)
+                step = STEP_MM[si] / 1000.0
+                ang = np.radians(STEP_DEG[si])
                 if c == "q":
-                    break
+                    raise StopIteration
                 if c == "x":
                     save = False
-                    break
+                    raise StopIteration
                 if c == "1":
-                    si = max(0, si - 1); print(f"jog speed {speeds[si]*100:.1f} cm/s")
+                    si = max(0, si - 1); print(f"step {STEP_MM[si]} mm / {STEP_DEG[si]} deg")
                 elif c == "2":
-                    si = min(len(speeds) - 1, si + 1); print(f"jog speed {speeds[si]*100:.1f} cm/s")
+                    si = min(len(STEP_MM) - 1, si + 1); print(f"step {STEP_MM[si]} mm / {STEP_DEG[si]} deg")
+                elif c == "c":
+                    recording = not recording
+                    print(">>> RECORDING ON (20 Hz)" if recording else f">>> RECORDING OFF ({len(P)} samples so far)")
                 elif c == " ":
-                    q = io.q(); p, qq = io.kin.fk(q)
-                    T.append(time.monotonic() - t0); Q.append(q); P.append(p); R.append(qq)
-                    print(f"  waypoint {len(P)}: {np.round(p, 4)}")
-                else:
-                    key, key_t = c, time.monotonic()
-            if io.stale():
-                print("joint_states stale -> stop"); break
-            twist = np.zeros(6)
-            if key is not None and time.monotonic() - key_t < 0.15:     # dead-man
-                if key in LIN:
-                    ax, sg = LIN[key]; twist[ax] = sg * speeds[si]
-                elif key in ANG:
-                    ax, sg = ANG[key]; twist[3 + ax] = sg * speeds[si] * 5.0
-            q = io.q()
-            now = time.monotonic()
-            if np.any(twist) and now - last_print > 0.5:
-                last_print = now
-                p_now, _ = io.kin.fk(q)
-                print(f"  key '{key}'  tool tip x={p_now[0]:+.3f} y={p_now[1]:+.3f} z={p_now[2]:+.3f} m")
-            cmd, _, _ = dls(io.kin.jacobian(q), twist, 0.02, 0.1, 0.04)
-            cmd = limit_qdot(cmd, last, qdot_max, 1.0 * dt)
+                    record(now); print(f"  waypoint {len(P)}: {np.round(P[-1], 4)}")
+                elif c == "h":
+                    p_t, q_t = p.copy(), qq.copy(); print("  hold")
+                elif c in LIN:
+                    ax, sg = LIN[c]
+                    if np.linalg.norm(p_t - p) < 2.0 * step:          # don't run ahead of the robot
+                        p_t = p_t.copy(); p_t[ax] += sg * step
+                elif c in ANG or c in ROLL:
+                    if np.linalg.norm(quat_error(q_t, qq)) < 2.0 * ang:
+                        if c in ANG:
+                            axv = np.zeros(3); ax, sg = ANG[c]; axv[ax] = sg
+                        else:
+                            axv = quat_to_rotmat(q_t)[:, 2] * ROLL[c]     # gripper (tool z) axis
+                        q_t = quat_normalize(quat_mul(quat_exp(axv * ang), q_t))
+
+            e_lin = p_t - p
+            e_ang = quat_error(q_t, qq)
+            v = kp_lin * e_lin
+            w = kp_ang * e_ang
+            if np.linalg.norm(v) > v_cap:
+                v *= v_cap / np.linalg.norm(v)
+            if np.linalg.norm(w) > w_cap:
+                w *= w_cap / np.linalg.norm(w)
+            cmd, _, _ = dls(io.kin.jacobian(q), np.concatenate([v, w]), 0.02, 0.1, 0.04)
+            cmd = limit_qdot(cmd, last, qdot_max, 1.5 * dt)
             last = cmd
             io.publish_qdot(cmd)
+
+            if recording and now - last_rec >= 0.05:
+                last_rec = now
+                record(now)
+            if now - last_print > 1.0 and (np.linalg.norm(e_lin) > 2e-4 or recording):
+                last_print = now
+                print(f"  tip x={p[0]:+.3f} y={p[1]:+.3f} z={p[2]:+.3f} m  "
+                      f"{'REC ' + str(len(P)) if recording else ''}")
             time.sleep(dt)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, StopIteration):
         pass
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old)
@@ -111,8 +153,11 @@ def main():
         if save and len(P) >= 4:
             path = data_dir("demos", a.name + ".npz")
             Demo(t=np.array(T), q=np.array(Q), pos=np.array(P), quat=np.array(R),
-                 joint_names=io.kin.joint_names, meta={"teleop_waypoints": True}).save(path)
-            print(f"Saved {len(P)} waypoints -> {path}")
+                 joint_names=io.kin.joint_names, meta={"teleop": True, "samples": len(P)}).save(path)
+            print(f"Saved {len(P)} samples -> {path}")
+            print(f"Next: python3 scripts/process_demo.py {path}")
+        elif save:
+            print(f"Nothing saved ({len(P)} samples; need >= 4). Press c to record next time.")
         node.destroy_node()
         if rclpy.ok():
             rclpy.shutdown()
