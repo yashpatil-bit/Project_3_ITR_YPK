@@ -129,16 +129,29 @@ def main():
                 w *= w_cap / np.linalg.norm(w)
             cmd, _, _ = dls(io.kin.jacobian(q), np.concatenate([v, w]), 0.02, 0.1, 0.04)
             cmd = limit_qdot(cmd, last, qdot_max, 0.5 * dt)
+            # joint-limit guard: never move a joint further into its last 0.1 rad
+            lo, hi = io.kin.lower + 0.1, io.kin.upper - 0.1
+            q_next = q + cmd * 0.3
+            bad = ((q_next < lo) & (cmd < 0)) | ((q_next > hi) & (cmd > 0))
+            if np.any(bad):
+                cmd = np.zeros_like(cmd)
+                p_t, q_t = p.copy(), qq.copy()
+                if now - last_print > 1.0:
+                    last_print = now
+                    print(f"  !! joint(s) {[int(j) + 1 for j in np.where(bad)[0]]} near their limit - move blocked, try another direction")
             last = cmd
             io.publish_qdot(cmd)
 
             if recording and now - last_rec >= 0.05:
                 last_rec = now
                 record(now)
-            if now - last_print > 1.0 and (np.linalg.norm(e_lin) > 2e-4 or recording):
+            moving = np.linalg.norm(e_lin) > 2e-4 or np.linalg.norm(e_ang) > 0.005
+            if now - last_print > 1.0 and (moving or recording):
                 last_print = now
-                print(f"  tip x={p[0]:+.3f} y={p[1]:+.3f} z={p[2]:+.3f} m  max|qdot|={np.max(np.abs(cmd)):.3f} rad/s "
-                      f"(joint{int(np.argmax(np.abs(cmd))) + 1})  {'REC ' + str(len(P)) if recording else ''}")
+                zt = quat_to_rotmat(qq)[:, 2]
+                print(f"  tip x={p[0]:+.3f} y={p[1]:+.3f} z={p[2]:+.3f} m  gripper points ({zt[0]:+.2f},{zt[1]:+.2f},{zt[2]:+.2f})  "
+                      f"joints(deg)={np.round(np.degrees(q)).astype(int).tolist()}  max|qdot|={np.max(np.abs(cmd)):.3f}"
+                      f"  {'REC ' + str(len(P)) if recording else ''}")
             time.sleep(dt)
     except (KeyboardInterrupt, StopIteration):
         pass
