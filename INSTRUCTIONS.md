@@ -183,9 +183,9 @@ In T3 (sourced as in B2):
 python3 scripts/check_setup.py
 ```
 ✅ The output ends with `RESULT: ready`.
-- Note the printed **tool pos**. Measure with a ruler where the gripper fingertips are relative
-  to the robot base, to find out whether the URDF frame `end-effector` is the flange or the
-  fingertips (needed in Step 7).
+- It also prints the flange (`end-effector`) and the gripper tool tip (`rq_tool_tip`, between the
+  fingertips) with their axes. Our config uses `rq_tool_tip`; the probe offset is measured from
+  there (Step 7).
 - If it fails, see Part H.
 
 ### Step 4: Gripper and motion test, no probe, arm away from the wire stand (15 min)
@@ -240,9 +240,10 @@ with `teleop_teach.py` under `./heal_server` (see D7).
 4. Twist the handle gently by hand. It must not rotate in the fingers.
 5. Tape the probe's cable loosely along the wrist, with slack, so it can't snag when the wrist
    rolls ±180°.
-6. Measure with a ruler from the `end-effector` frame (see Step 3) to the **centre of the
-   ring**. Put it in `config/heal_wire_trace.yaml` as `robot.tool_xyz`, usually only z, e.g.
-   `tool_xyz: [0.0, 0.0, 0.12]`.
+6. Measure with a ruler from the **point between the gripper fingertips** (frame `rq_tool_tip`) to
+   the **centre of the ring**. Put it in `config/heal_wire_trace.yaml` as `robot.tool_xyz`, usually
+   only along z (straight out of the gripper), e.g. `tool_xyz: [0.0, 0.0, 0.09]`. `check_setup.py`
+   prints the `rq_tool_tip` z-axis so you can confirm it points out of the gripper.
 
 ✅ The probe is held firmly and `tool_xyz` is set.
 
@@ -628,9 +629,9 @@ Edit it with any text editor. Values are in metres, radians and seconds.
 
 | Key | What it is | When to change |
 |---|---|---|
-| `robot.tip_link` | URDF frame of the end-effector (`end-effector`) | If check_setup reports 0 joints |
+| `robot.tip_link` | URDF frame we control: `rq_tool_tip` (between the gripper fingertips) | If check_setup reports 0 joints |
 | `robot.joint_names` | Joint order of the velocity controller | If the robot moves the wrong joint |
-| `robot.tool_xyz` | **Ring centre relative to `tip_link`** | Step 7 (measure with a ruler) |
+| `robot.tool_xyz` | **Ring centre relative to `rq_tool_tip`** (fingertip point) | Step 7 (measure with a ruler) |
 | `robot.rate_hz` | Control rate (100 Hz) | Leave it |
 | `recording.rate_hz` | Teaching sample rate (50 Hz) | Leave it |
 | `processing.v_max` / `a_max` / `a_lat_max` | Speed and accelerations of the planned path | Speed-up (Step 11), or use the command-line options |

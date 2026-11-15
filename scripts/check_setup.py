@@ -69,6 +69,20 @@ def main():
         print(f"tool pos [m]= {np.round(p, 4)}   quat xyzw = {np.round(qq, 4)}")
         print(f"Jacobian singular values = {np.round(sv, 3)}  (smallest < 0.04 => near singularity)")
 
+        # Compare the flange and the gripper tool tip, and show the tool axes in the base frame
+        from wire_trace.kdl_kinematics import KDLKinematics
+        from wire_trace.so3 import quat_to_rotmat
+        print("\nFrames (base_link coordinates, tool offset NOT applied):")
+        for name in ("end-effector", "rq_tool_tip"):
+            try:
+                k = KDLKinematics(io._urdf, cfg["robot"]["base_link"], name)
+                pf, qf = k.fk(q)
+                R = quat_to_rotmat(qf)
+                print(f"  {name:13s} pos={np.round(pf, 4)}  x-axis={np.round(R[:, 0], 2)}  "
+                      f"y-axis={np.round(R[:, 1], 2)}  z-axis={np.round(R[:, 2], 2)}")
+            except Exception as e:  # noqa: BLE001
+                print(f"  {name:13s} not available: {e}")
+
         while a.watch and rclpy.ok():
             rclpy.spin_once(node, timeout_sec=0.5)
             p, qq = io.kin.fk(io.q())
