@@ -271,6 +271,9 @@ def install():
         def jacobian(self, q):
             return WORLD.arm.jacobian(np.asarray(q, float))
 
+        def frame_positions(self, q):
+            return np.array([T[:3, 3] for T in WORLD.arm.frames(np.asarray(q, float))[1:]])
+
     kdl_mod.KDLKinematics = KDLKinematics
     sys.modules["wire_trace.kdl_kinematics"] = kdl_mod
 

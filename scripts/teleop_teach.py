@@ -66,6 +66,7 @@ def main():
     recording = False
     last_rec = 0.0
     last_print = 0.0
+    last_warn = 0.0
     old = termios.tcgetattr(sys.stdin)
     save = True
     print(__doc__)
@@ -127,18 +128,29 @@ def main():
                 v *= v_cap / np.linalg.norm(v)
             if np.linalg.norm(w) > w_cap:
                 w *= w_cap / np.linalg.norm(w)
-            cmd, _, _ = dls(io.kin.jacobian(q), np.concatenate([v, w]), 0.02, 0.1, 0.04)
+            J = io.kin.jacobian(q)
+            cmd, smin, _ = dls(J, np.concatenate([v, w]), 0.02, 0.1, 0.04)
             cmd = limit_qdot(cmd, last, qdot_max, 0.5 * dt)
-            # joint-limit guard: never move a joint further into its last 0.1 rad
+            warn = None
+            # 1) the robot cannot follow the target (singularity / limits): hold instead of wandering
+            if np.linalg.norm(e_lin) > 0.015 or np.linalg.norm(e_ang) > np.radians(25):
+                warn = (f"target unreachable from here (pos err {np.linalg.norm(e_lin)*1000:.0f} mm, "
+                        f"ori err {np.degrees(np.linalg.norm(e_ang)):.0f} deg) - HOLDING. Try another direction / pose")
+            # 2) near a singularity: big wrist swings for small motions
+            elif smin < 0.03:
+                warn = f"near a singularity (sigma_min {smin:.3f}) - HOLDING. Move back the way you came"
+            # 3) joint-limit guard: never move a joint further into its last 0.1 rad
             lo, hi = io.kin.lower + 0.1, io.kin.upper - 0.1
             q_next = q + cmd * 0.3
             bad = ((q_next < lo) & (cmd < 0)) | ((q_next > hi) & (cmd > 0))
             if np.any(bad):
+                warn = f"joint(s) {[int(j) + 1 for j in np.where(bad)[0]]} near their limit - HOLDING. Try another direction"
+            if warn is not None:
                 cmd = np.zeros_like(cmd)
-                p_t, q_t = p.copy(), qq.copy()
-                if now - last_print > 1.0:
-                    last_print = now
-                    print(f"  !! joint(s) {[int(j) + 1 for j in np.where(bad)[0]]} near their limit - move blocked, try another direction")
+                p_t, q_t = p.copy(), qq.copy()        # drop the unreachable target
+                if now - last_warn > 1.0:
+                    last_warn = now
+                    print("  !! " + warn)
             last = cmd
             io.publish_qdot(cmd)
 

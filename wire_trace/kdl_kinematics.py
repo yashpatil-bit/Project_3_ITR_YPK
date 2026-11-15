@@ -71,3 +71,13 @@ class KDLKinematics:
         J = kdl.Jacobian(self.n)
         self.jac_solver.JntToJac(self._jnt(q), J)
         return np.array([[J[i, j] for j in range(self.n)] for i in range(6)], float)
+
+    def frame_positions(self, q):
+        """Origins of every segment frame along the chain (for simple table-collision checks)."""
+        jq = self._jnt(q)
+        out = []
+        for seg in range(1, self.chain.getNrOfSegments() + 1):
+            f = kdl.Frame()
+            self.fk_solver.JntToCart(jq, f, seg)
+            out.append([f.p.x(), f.p.y(), f.p.z()])
+        return np.array(out)
