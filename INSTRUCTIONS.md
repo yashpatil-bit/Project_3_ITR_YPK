@@ -595,6 +595,13 @@ python3 stage2/learn_dmp.py data/demos/demo_01.npz data/demos/demo_02.npz data/d
    ```
 **Ask the TA before moving the stand.**
 
+### D15a. `scripts/report.py`: one block of text for remote help
+Prints the code version, key config values, your demos and processed files, and the latest run
+summaries. Copy the whole output into the chat.
+```bash
+python3 scripts/report.py
+```
+
 ### D15. Practice tools (no robot): `tools/fake_robot.py` and `scripts/simulate_replay.py`
 See Part I.
 
@@ -738,6 +745,21 @@ committing real lab results.
 teaching) and Step 11 (speed tuning).
 
 ---
+
+## K0. Working with remote help (Claude can't access the lab PC)
+1. **Getting code fixes:** Claude pushes them to GitHub. On the lab PC, run in T3:
+   ```bash
+   cd ~/Project_3_ITR_YPK && git pull
+   ```
+   Then re-run the command that failed.
+2. **Reporting a problem:** send Claude:
+   - the **full terminal output** (copy the text, not a photo, when possible)
+   - the output of `python3 scripts/report.py`
+   - the run plot `data/runs/<run>.png` or the processing preview `.png` (screenshot)
+   - a photo or video of the robot if the motion looks wrong
+3. **Never edit the code on the lab PC.** Config values Claude asks you to change are the only
+   exception. Then `git pull` keeps working. If `git pull` complains about local changes,
+   run `git stash`, then `git pull`, then `git stash pop`.
 
 ## K. Saving results to GitHub
 
