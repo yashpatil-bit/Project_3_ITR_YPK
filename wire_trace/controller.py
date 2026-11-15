@@ -163,9 +163,21 @@ class TrackingController:
         info["k"] = k
         ff = k * p.speed_scale if self.tau < T else 0.0
 
-        twist = np.concatenate([ff * v_d + p.kp_pos * e_pos, ff * w_d + p.kp_ori * e_ori])
-        qdot, smin, lam = dls(J, twist, p.damping, p.damping_max, p.sigma_thresh)
+        # DLS is linear in the twist: split into feed-forward and feedback joint velocities
+        q_ff, smin, lam = dls(J, np.concatenate([v_d, w_d]), p.damping, p.damping_max, p.sigma_thresh)
+        q_fb, _, _ = dls(J, np.concatenate([p.kp_pos * e_pos, p.kp_ori * e_ori]), p.damping, p.damping_max, p.sigma_thresh)
         info["sigma_min"], info["lam"] = smin, lam
+        # time scaling: if the joints cannot follow the planned speed, slow the REFERENCE down
+        # (path preserved) instead of letting the clamp distort the direction
+        if ff > 0:
+            head = 0.9 * self.qdot_max - np.abs(q_fb)
+            need = np.abs(ff * q_ff)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                ratio = np.where(need > 1e-9, np.maximum(head, 0.0) / need, np.inf)
+            sigma = float(np.clip(np.min(ratio), 0.05, 1.0))
+            ff *= sigma
+            info["k"] = k * sigma
+        qdot = ff * q_ff + q_fb
         qdot = limit_qdot(qdot, self.last_qdot, self.qdot_max, p.qddot_max * dt)
 
         # do not drive further into a joint limit

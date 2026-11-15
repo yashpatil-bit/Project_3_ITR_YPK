@@ -32,7 +32,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("traj")
     ap.add_argument("--end", action="store_true", help="go to the end of the trajectory instead")
-    ap.add_argument("--max-joint-speed", type=float, default=0.25, help="rad/s peak in phase 1")
+    ap.add_argument("--max-joint-speed", type=float, default=0.15, help="rad/s peak in phase 1")
     ap.add_argument("--config", default=None)
     ap.add_argument("--urdf", default=None)
     ap.add_argument("--yes", action="store_true")

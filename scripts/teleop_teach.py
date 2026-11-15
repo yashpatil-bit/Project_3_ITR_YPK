@@ -58,9 +58,9 @@ def main():
     dt = 1.0 / float(cfg["robot"]["rate_hz"])
     si = 1
     kp_lin, kp_ang = 3.0, 3.0
-    v_cap, w_cap = 0.02, 0.4                  # m/s, rad/s
+    v_cap, w_cap = 0.01, 0.10                 # m/s, rad/s (HEAL safety trips on fast joints)
     last = np.zeros(io.kin.n)
-    qdot_max = np.full(io.kin.n, 0.4)
+    qdot_max = np.full(io.kin.n, 0.15)
     T, Q, P, R = [], [], [], []
     t0 = time.monotonic()
     recording = False
@@ -82,7 +82,7 @@ def main():
         while rclpy.ok():
             rclpy.spin_once(node, timeout_sec=0.0)
             if io.stale():
-                print("joint_states stale -> stop")
+                print("joint_states stale -> stop (robot in error? check T1)")
                 break
             q = io.q()
             p, qq = io.kin.fk(q)
@@ -128,7 +128,7 @@ def main():
             if np.linalg.norm(w) > w_cap:
                 w *= w_cap / np.linalg.norm(w)
             cmd, _, _ = dls(io.kin.jacobian(q), np.concatenate([v, w]), 0.02, 0.1, 0.04)
-            cmd = limit_qdot(cmd, last, qdot_max, 1.5 * dt)
+            cmd = limit_qdot(cmd, last, qdot_max, 0.5 * dt)
             last = cmd
             io.publish_qdot(cmd)
 
@@ -137,14 +137,17 @@ def main():
                 record(now)
             if now - last_print > 1.0 and (np.linalg.norm(e_lin) > 2e-4 or recording):
                 last_print = now
-                print(f"  tip x={p[0]:+.3f} y={p[1]:+.3f} z={p[2]:+.3f} m  "
-                      f"{'REC ' + str(len(P)) if recording else ''}")
+                print(f"  tip x={p[0]:+.3f} y={p[1]:+.3f} z={p[2]:+.3f} m  max|qdot|={np.max(np.abs(cmd)):.3f} rad/s "
+                      f"(joint{int(np.argmax(np.abs(cmd))) + 1})  {'REC ' + str(len(P)) if recording else ''}")
             time.sleep(dt)
     except (KeyboardInterrupt, StopIteration):
         pass
     finally:
         termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old)
         io.publish_zero(10)
+        log_path = data_dir("runs", f"teleop_{a.name}_cmds.npy")
+        io.save_cmd_log(log_path)
+        print(f"command log -> {log_path}")
         try:
             p1, _ = io.kin.fk(io.q())
             print(f"END   tool tip x={p1[0]:+.3f} y={p1[1]:+.3f} z={p1[2]:+.3f} m")

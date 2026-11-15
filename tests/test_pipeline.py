@@ -186,8 +186,8 @@ def test_scripts_with_fake_robot(tmp_path):
 
     run("tools/fake_robot.py", "--make-demo")
     out_traj = str(tmp_path / "t.npz")
-    run("scripts/process_demo.py", "data/demos/sim_demo.npz", "--vmax", "0.15", "--amax", "0.4",
-        "--alat", "0.4", "--out", out_traj, "--no-plot")
+    run("scripts/process_demo.py", "data/demos/sim_demo.npz", "--vmax", "0.10", "--amax", "0.1",
+        "--alat", "0.1", "--out", out_traj, "--no-plot")
     out = run("tools/fake_robot.py", "scripts/replay.py", out_traj, "--yes", "--tag", "pytest_refuse")
     assert "go_to_start" in out
     run("tools/fake_robot.py", "scripts/go_to_start.py", out_traj, "--yes", "--max-dist", "0.5")

@@ -40,6 +40,8 @@ class RobotIO:
         node.create_subscription(JointState, r["joint_state_topic"], self._js_cb, qos_profile_sensor_data)
         self._urdf_sub = node.create_subscription(String, r["robot_description_topic"], self._urdf_cb, LATCHED_QOS)
         self.pub = node.create_publisher(Float64MultiArray, r["velocity_command_topic"], 1) if need_command else None
+        self.cmd_log: list = []
+        self.n_clamped = 0
 
     # -- callbacks --------------------------------------------------------
     def _js_cb(self, msg: JointState):
@@ -93,13 +95,32 @@ class RobotIO:
         return np.array([js.effort[idx[n]] for n in self.kin.joint_names], float)
 
     def publish_qdot(self, qdot_chain: np.ndarray) -> None:
-        """qdot in KDL chain order -> Float64MultiArray in robot.joint_names order."""
+        """qdot in KDL chain order -> Float64MultiArray in robot.joint_names order.
+
+        Last line of defence: every joint is limited to robot.qdot_hard_limit (direction
+        preserving), whatever the calling script asked for. HEAL's own safety stops the robot
+        with "Large Velocity for Joint" above its threshold.
+        """
         if self.pub is None:
             return
+        qdot_chain = np.asarray(qdot_chain, dtype=float)
+        lim = float(self.cfg["robot"].get("qdot_hard_limit", 0.25))
+        peak = float(np.max(np.abs(qdot_chain))) if qdot_chain.size else 0.0
+        if peak > lim:
+            qdot_chain = qdot_chain * (lim / peak)
+            self.n_clamped += 1
+        self.cmd_log.append((time.monotonic(), *qdot_chain.tolist()))
+        if len(self.cmd_log) > 200000:
+            self.cmd_log = self.cmd_log[-100000:]
         cidx = {n: i for i, n in enumerate(self.kin.joint_names)}
         msg = Float64MultiArray()
         msg.data = [float(qdot_chain[cidx[n]]) for n in self.cmd_names]
         self.pub.publish(msg)
+
+    def save_cmd_log(self, path: str) -> None:
+        """Save every published joint-velocity command (t, qdot...) for debugging."""
+        if self.cmd_log:
+            np.save(path, np.array(self.cmd_log))
 
     def publish_zero(self, repeats: int = 5) -> None:
         if self.pub is None:

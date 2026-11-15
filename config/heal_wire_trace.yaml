@@ -19,6 +19,10 @@ robot:
   tool_rpy: [0.0, 0.0, 0.0]
   rate_hz: 100.0                      # control loop rate (starter code used 100 Hz)
   joint_state_timeout: 0.1            # s, stop if joint_states go stale
+  # Hard cap on EVERY joint-velocity command any script sends [rad/s].
+  # HEAL stopped with "Safety error : Large Velocity for Joint" during a 0.4 rad/s wrist roll.
+  # Keep 0.25 until the TA tells us HEAL's safety threshold.
+  qdot_hard_limit: 0.25
 
 recording:
   rate_hz: 50.0                       # brief says >= 10-20 Hz, denser is better
@@ -50,8 +54,8 @@ controller:
   damping: 0.02
   damping_max: 0.10
   sigma_thresh: 0.04
-  qdot_max: [0.6, 0.6, 0.6, 0.8, 0.8, 0.8]   # rad/s  (keep <= HEAL limits)  # MEASURE / ask TA
-  qddot_max: 3.0
+  qdot_max: [0.25, 0.25, 0.25, 0.25, 0.25, 0.25]   # rad/s, <= robot.qdot_hard_limit  # ask TA for HEAL's safety limit
+  qddot_max: 1.0                      # rad/s^2 - gentle ramps (HEAL safety)
   qddot_stop: 3.0
   speed_scale: 0.1                    # ALWAYS start at 0.1 (10 %) - override with --speed
   err_soft: 0.0015

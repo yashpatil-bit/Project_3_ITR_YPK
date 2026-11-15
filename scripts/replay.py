@@ -150,6 +150,9 @@ def main():
                     break
         if not a.dry_run:
             io.publish_zero(10)
+            io.save_cmd_log(data_dir("runs", f"{a.tag}_{time.strftime('%Y%m%d_%H%M%S')}_cmds.npy"))
+            if io.n_clamped:
+                print(f"NOTE: {io.n_clamped} commands were capped at robot.qdot_hard_limit")
         t_end = log.rows["t"][-1] if log.rows["t"] else 0.0
         log.contacts = contacts
         log.meta.update(status=status, reason=reason)
