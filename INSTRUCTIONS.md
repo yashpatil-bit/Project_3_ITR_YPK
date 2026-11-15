@@ -70,19 +70,21 @@ smooth, and repeatable 3 times. Bonus (Stage 2): the robot learns to do it bette
 
 ## B. One-time setup and launching HEAL
 
+Our code lives in the group folder **`~/ITR_2026/Grp8/final/Project_3_ITR_YPK`** on the lab PC.
+
 ### B1. Get the code (lab PC, once)
 ```bash
-cd ~ && git clone -b claude/sleepy-bohr-jn2txo https://github.com/yashpatil-bit/Project_3_ITR_YPK.git
+mkdir -p ~/ITR_2026/Grp8/final && cd ~/ITR_2026/Grp8/final && git clone -b claude/sleepy-bohr-jn2txo https://github.com/yashpatil-bit/Project_3_ITR_YPK.git
 ```
 ```bash
-cd ~/Project_3_ITR_YPK && pip3 install -r requirements.txt
+cd ~/ITR_2026/Grp8/final/Project_3_ITR_YPK && pip3 install -r requirements.txt
 ```
 ```bash
 python3 -m pytest -q
 ```
 This must end with `17 passed`. If you already cloned it, update it with:
 ```bash
-cd ~/Project_3_ITR_YPK && git fetch origin && git checkout claude/sleepy-bohr-jn2txo && git pull
+cd ~/ITR_2026/Grp8/final/Project_3_ITR_YPK && git fetch origin && git checkout claude/sleepy-bohr-jn2txo && git pull
 ```
 
 ### B2. Terminals
@@ -100,7 +102,7 @@ README, then change into our repo:
 ```bash
 cd ~/Debojit_WS/addverb_ws/
 source install/setup.bash
-cd ~/Project_3_ITR_YPK
+cd ~/ITR_2026/Grp8/final/Project_3_ITR_YPK
 ```
 
 ### B3. Launching HEAL: only the starter README commands
@@ -350,7 +352,7 @@ path looks like the wire.
 
 ## D. Command reference
 
-All commands run in T3 from `~/Project_3_ITR_YPK`, after sourcing (B2). Every script accepts
+All commands run in T3 from `~/ITR_2026/Grp8/final/Project_3_ITR_YPK`, after sourcing (B2). Every script accepts
 `-h` for help. Options shared by most scripts:
 - `--config FILE`: use another config file (default `config/heal_wire_trace.yaml`).
 - `--urdf FILE`: read the robot model from a file if `/robot_description` isn't published.
@@ -677,7 +679,7 @@ Edit it with any text editor. Values are in metres, radians and seconds.
 
 | Problem | Fix |
 |---|---|
-| `pytest` fails / `ModuleNotFoundError` | `pip3 install -r requirements.txt`; make sure you are inside `~/Project_3_ITR_YPK` |
+| `pytest` fails / `ModuleNotFoundError` | `pip3 install -r requirements.txt`; make sure you are inside `~/ITR_2026/Grp8/final/Project_3_ITR_YPK` |
 | `Timed out waiting for: URDF` | Velocity controller (T2) not running, or the topic name differs: check `ros2 topic list`. Or save the URDF and use `--urdf file.urdf` |
 | `Timed out waiting for: JointState` | Robot program not running, or the terminal wasn't sourced (B2) |
 | `KDL chain has 0 joints` | Wrong `robot.tip_link`; check `ros2 run tf2_tools view_frames` |
@@ -749,7 +751,7 @@ teaching) and Step 11 (speed tuning).
 ## K0. Working with remote help (Claude can't access the lab PC)
 1. **Getting code fixes:** Claude pushes them to GitHub. On the lab PC, run in T3:
    ```bash
-   cd ~/Project_3_ITR_YPK && git pull
+   cd ~/ITR_2026/Grp8/final/Project_3_ITR_YPK && git pull
    ```
    Then re-run the command that failed.
 2. **Reporting a problem:** send Claude:
@@ -765,7 +767,7 @@ teaching) and Step 11 (speed tuning).
 
 After a lab session, commit the real demos, processed files, run logs and config:
 ```bash
-cd ~/Project_3_ITR_YPK && git add config data && git commit -m "lab session: demos, runs, config"
+cd ~/ITR_2026/Grp8/final/Project_3_ITR_YPK && git add config data && git commit -m "lab session: demos, runs, config"
 ```
 ```bash
 git push

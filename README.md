@@ -58,14 +58,14 @@ code runs on (`~/Debojit_WS/addverb_ws`).
   ```
 - Get the code:
   ```bash
-  git clone -b claude/sleepy-bohr-jn2txo https://github.com/yashpatil-bit/Project_3_ITR_YPK.git
+  mkdir -p ~/ITR_2026/Grp8/final && cd ~/ITR_2026/Grp8/final && git clone -b claude/sleepy-bohr-jn2txo https://github.com/yashpatil-bit/Project_3_ITR_YPK.git
   ```
 - Every terminal that runs one of our scripts on the lab PC sources the workspace exactly as
   the starter README does, then changes into our repo:
   ```bash
   cd Debojit_WS/addverb_ws/
   source install/setup.bash
-  cd ~/Project_3_ITR_YPK
+  cd ~/ITR_2026/Grp8/final/Project_3_ITR_YPK
   ```
 
 **Your own laptop (no robot, no ROS):** `pip3 install -r requirements.txt` is enough for

@@ -17,14 +17,14 @@ Roles: **Operator** at the keyboard, **Buddy** with a hand on the E-stop at all 
 
 ## 1. Software and robot up (15 min)
 ```bash
-git clone -b claude/sleepy-bohr-jn2txo https://github.com/yashpatil-bit/Project_3_ITR_YPK.git
-cd Project_3_ITR_YPK && pip3 install -r requirements.txt && python3 -m pytest -q
+mkdir -p ~/ITR_2026/Grp8/final && cd ~/ITR_2026/Grp8/final && git clone -b claude/sleepy-bohr-jn2txo https://github.com/yashpatil-bit/Project_3_ITR_YPK.git
+cd ~/ITR_2026/Grp8/final/Project_3_ITR_YPK && pip3 install -r requirements.txt && python3 -m pytest -q
 ```
 (If you already cloned it: `git pull`.)
 Launch HEAL with **only** the starter README commands (README §2 "Launching HEAL"):
 ssh, then `cobot run`, type `1`, `./heal_server` (step 4), then the velocity controller (step 5).
 In another fresh terminal, source the workspace like step 5 (`cd Debojit_WS/addverb_ws/`,
-`source install/setup.bash`), `cd ~/Project_3_ITR_YPK`, then:
+`source install/setup.bash`), `cd ~/ITR_2026/Grp8/final/Project_3_ITR_YPK`, then:
 ```bash
 python3 scripts/check_setup.py
 ```
