@@ -109,22 +109,33 @@ def evaluate(kin, poses, q_start, lo, hi, table_z, max_jump=0.5):
             if np.min(fp[3:, 2]) < table_z:
                 return None, "arm too low (table)"
         qs.append(q.copy())
+    if min(smins) < 0.03:
+        return None, "near singularity"
     score = min(margins) + 2.0 * min(smins) - 0.02 * travel
     return score, dict(margin=min(margins), smin=min(smins), travel=travel, q0=qs[0], qs=np.array(qs))
 
 
+GRIPS = {
+    # name: (tool_rpy, offset axis) - ring-frame z (handle direction) expressed in the tool-tip frame
+    "axial": ((0.0, 0.0, 0.0), (0.0, 0.0, 1.0)),                 # handle straight out of the gripper
+    "cross_y": ((-np.pi / 2, 0.0, 0.0), (0.0, 1.0, 0.0)),        # handle held ACROSS the fingertips
+    "cross_x": ((0.0, np.pi / 2, 0.0), (1.0, 0.0, 0.0)),         # handle across, the other way
+}
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--offset", type=float, default=0.09, help="ring centre beyond the fingertips [m]")
+    ap.add_argument("--offset", type=float, default=0.08, help="grip point -> ring centre along the handle [m]")
     ap.add_argument("--width", type=float, default=0.30, help="wire length left-right [m]")
     ap.add_argument("--wire-height", type=float, default=0.15, help="wire height top-bottom [m]")
-    ap.add_argument("--loops", type=int, default=3, help="number of up-down loops")
-    ap.add_argument("--height", type=float, nargs="*", default=[0.15, 0.22, 0.30, 0.38],
+    ap.add_argument("--loops", type=int, default=4, help="number of up-down loops")
+    ap.add_argument("--height", type=float, nargs="*", default=[0.22, 0.32, 0.42],
                     help="candidate wire-centre heights above the robot base mount [m]")
-    ap.add_argument("--dist", type=float, nargs="*", default=[0.35, 0.45, 0.55, 0.65, 0.75],
+    ap.add_argument("--dist", type=float, nargs="*", default=[0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70],
                     help="candidate horizontal distances base -> wire centre [m]")
-    ap.add_argument("--yaw", type=float, nargs="*", default=[0, 90, 180, -90],
-                    help="candidate directions [deg] around the base, 0 = +y (home reach direction)")
+    ap.add_argument("--yaw", type=float, nargs="*", default=[0.0],
+                    help="directions [deg] around the base (HEAL's base turns +-180, so one is enough)")
+    ap.add_argument("--grip", nargs="*", default=["cross_y", "cross_x", "axial"], choices=list(GRIPS))
     ap.add_argument("--mode", nargs="*", default=["fixed", "roll"], choices=["fixed", "roll"],
                     help="fixed = constant probe orientation (ring tilted 45 deg), roll = full ring roll")
     ap.add_argument("--pitch", type=float, nargs="*", default=[0, 20, 40],
@@ -140,43 +151,46 @@ def main():
     io = RobotIO(node, cfg, need_command=False)
     io.wait_ready()
     r = cfg["robot"]
-    kin = KDLKinematics(io._urdf, r["base_link"], r["tip_link"], (0.0, 0.0, a.offset), (0.0, 0.0, 0.0))
+    kins = {g: KDLKinematics(io._urdf, r["base_link"], r["tip_link"],
+                             tuple(a.offset * np.array(GRIPS[g][1])), GRIPS[g][0]) for g in a.grip}
     lo, hi = io.kin.lower, io.kin.upper
     q_now = io.q()
     rng = np.random.default_rng(0)
-    seeds = [q_now, np.zeros(6)] + [rng.uniform(lo * 0.8, hi * 0.8) for _ in range(10)]
-
-    # diagnostics: where are the chain frames at home?
-    if hasattr(kin, "frame_positions"):
-        print("chain frame heights at the current pose [m]:", np.round(kin.frame_positions(q_now)[:, 2], 3).tolist())
+    seeds = [q_now, np.zeros(6)] + [rng.uniform(lo * 0.9, hi * 0.9) for _ in range(22)]
+    any_kin = next(iter(kins.values()))
+    if hasattr(any_kin, "frame_positions"):
+        print("chain frame heights at the current pose [m]:", np.round(any_kin.frame_positions(q_now)[:, 2], 3).tolist())
     print(f"joint limits (deg): low {np.round(np.degrees(lo)).astype(int).tolist()} high {np.round(np.degrees(hi)).astype(int).tolist()}")
 
     t0 = time.time()
     reasons = Counter()
 
-    def search(cands, step, n_seeds, label, max_jump):
+    def search(cands, step, n_try, label, max_jump):
         out = []
         for n, cand in enumerate(cands, 1):
-            yaw_d, dist, h, mode, pitch_d, roll0_d = cand
+            grip, yaw_d, dist, h, mode, pitch_d, roll0_d = cand
+            kin = kins[grip]
             yaw = np.radians(yaw_d)
             c = np.array([dist * np.sin(yaw), dist * np.cos(yaw), h])
             poses = wire_poses(c, yaw, a.width, a.wire_height, a.loops, np.radians(roll0_d), step,
                                mode=mode, pitch=np.radians(pitch_d))
-            best, tried = None, 0
+            # all distinct start solutions, best joint margin first
+            sols = []
             for s0 in seeds:
-                q0, ok = ik_point(kin, poses[0][0], poses[0][1], s0.copy(), iters=80, lo=lo, hi=hi)
-                if not ok:
-                    continue
-                tried += 1
+                q0, ok = ik_point(kin, poses[0][0], poses[0][1], s0.copy(), iters=60, lo=lo, hi=hi)
+                if ok and not any(np.max(np.abs(q0 - q1)) < 0.1 for q1 in sols):
+                    sols.append(q0)
+            if not sols:
+                reasons["start pose unreachable"] += 1
+                continue
+            sols.sort(key=lambda q: -float(np.min(np.minimum(q - lo, hi - q))))
+            best = None
+            for q0 in sols[:n_try]:
                 sc, info = evaluate(kin, poses, q0, lo, hi, a.table_z, max_jump)
                 if sc is None:
                     reasons[info.split(" at")[0]] += 1
                 elif best is None or sc > best[0]:
                     best = (sc, info)
-                if tried >= n_seeds:
-                    break
-            if tried == 0:
-                reasons["start pose unreachable"] += 1
             if best is not None:
                 out.append((best[0], cand, best[1]))
             if n % 200 == 0:
@@ -185,15 +199,16 @@ def main():
         return out
 
     cands = []
-    for mode in a.mode:
-        rolls = (0, 90, 180, 270) if mode == "roll" else (45, 135, 225, 315)
-        cands += [(y, d, h, mode, pt, r0) for y in a.yaw for d in a.dist for h in a.height
-                  for pt in a.pitch for r0 in rolls]
-    print(f"Searching {len(cands)} placements (ring offset {a.offset*100:.0f} cm, "
+    for grip in a.grip:
+        for mode in a.mode:
+            rolls = (0, 90, 180, 270) if mode == "roll" else (45, 135, 225, 315)
+            cands += [(grip, y, d, h, mode, pt, r0) for y in a.yaw for d in a.dist for h in a.height
+                      for pt in a.pitch for r0 in rolls]
+    print(f"Searching {len(cands)} placements (ring {a.offset*100:.0f} cm from the grip point, "
           f"wire {a.width*100:.0f} x {a.wire_height*100:.0f} cm, {a.loops} loops). Coarse pass ...")
     coarse = search(cands, 0.025, 2, "coarse", 1.0)
     print(f"Coarse pass: {len(coarse)} feasible.   Failure reasons: {dict(reasons)}")
-    results = search([cand for _, cand, _ in coarse[:20]], a.step, 3, "fine", 0.5) if coarse else []
+    results = search([cand for _, cand, _ in coarse[:25]], a.step, 4, "fine", 0.5) if coarse else []
     print(f"Done in {time.time()-t0:.0f} s")
     node.destroy_node()
     rclpy.shutdown()
@@ -201,22 +216,19 @@ def main():
     if not results:
         print("\nNo feasible placement found. Send Claude this whole output (failure reasons above).")
         return
-    print(f"\n{len(results)} feasible placements. Best 10 (higher score = more margin):")
-    print(" rank  mode   pitch  dir  dist  height  roll0  margin  sigma_min  joints at start (deg)")
-    for i, (sc, cand, info) in enumerate(results[:10]):
-        yaw_d, dist, h, mode, pitch_d, roll0_d = cand
-        print(f" {i+1:4d}  {mode:5s}  {pitch_d:4.0f}  {yaw_d:4.0f}  {dist:4.2f}  {h:5.2f}   {roll0_d:4.0f}  "
+    print(f"\n{len(results)} feasible placements. Best 12 (higher score = more margin):")
+    print(" rank  grip     mode   pitch  dist  height  roll0  margin  sigma_min  joints at start (deg)")
+    for i, (sc, cand, info) in enumerate(results[:12]):
+        grip, yaw_d, dist, h, mode, pitch_d, roll0_d = cand
+        print(f" {i+1:4d}  {grip:7s}  {mode:5s}  {pitch_d:4.0f}  {dist:4.2f}  {h:5.2f}   {roll0_d:4.0f}  "
               f"{np.degrees(info['margin']):5.0f}deg  {info['smin']:.3f}     {np.round(np.degrees(info['q0'])).astype(int).tolist()}")
     sc, cand, info = results[0]
-    yaw_d, dist, h, mode, pitch_d, roll0_d = cand
+    grip, yaw_d, dist, h, mode, pitch_d, roll0_d = cand
     np.save(data_dir("wire_start_q.npy"), info["q0"])
     np.save(data_dir("wire_path_q.npy"), info["qs"])
-    yaw = np.radians(yaw_d)
-    print(f"\nBEST ({mode} orientation, handle tilted {pitch_d:.0f} deg down):")
-    print(f"  WIRE CENTRE {dist*100:.0f} cm from the robot base axis, direction {yaw_d:.0f} deg "
-          f"(0 = along +y away from the robot, 90 = to your right, -90 = to your left),")
-    print(f"  {h*100:.0f} cm above the robot's mounting surface, wire plane FACING the robot.")
-    print(f"  = x {dist*np.sin(yaw)*100:+.0f} cm, y {dist*np.cos(yaw)*100:+.0f} cm from the base centre.")
+    print(f"\nBEST: grip '{grip}', {mode} orientation, handle tilted {pitch_d:.0f} deg down, ring roll {roll0_d:.0f} deg")
+    print(f"  wire centre {dist*100:.0f} cm horizontally from the robot base axis, {h*100:.0f} cm above the robot's")
+    print("  mounting surface, wire plane FACING the robot (any direction around the base).")
     print(f"Start joint angles -> data/wire_start_q.npy  ({np.round(np.degrees(info['q0']), 1).tolist()} deg)")
 
 
