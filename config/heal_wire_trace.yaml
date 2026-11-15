@@ -15,8 +15,11 @@ robot:
   # = from the point between the fingertips to the ring centre, usually only along z
   # (straight out of the gripper), e.g. ring centre 9 cm beyond the fingertips -> [0, 0, 0.09].
   # scripts/check_setup.py prints the rq_tool_tip axes to confirm which way z points.
-  tool_xyz: [0.0, 0.0, 0.0]
-  tool_rpy: [0.0, 0.0, 0.0]
+  # Lab setup (find_pose result): probe handle held ACROSS the fingertips ("cross_y" grip),
+  # ring centre 8 cm from the grip point along the tool-tip y axis. The rotation makes the
+  # controlled frame's z axis = handle direction, so teleop n/m = roll about the handle.
+  tool_xyz: [0.0, 0.08, 0.0]
+  tool_rpy: [-1.5708, 0.0, 0.0]
   rate_hz: 100.0                      # control loop rate (starter code used 100 Hz)
   joint_state_timeout: 0.1            # s, stop if joint_states go stale
   # Hard cap on EVERY joint-velocity command any script sends [rad/s].
