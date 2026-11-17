@@ -70,6 +70,9 @@ class RobotIO:
         r = self.cfg["robot"]
         self.kin = KDLKinematics(self._urdf, r["base_link"], r["tip_link"],
                                  r.get("tool_xyz", [0, 0, 0]), r.get("tool_rpy", [0, 0, 0]))
+        if self.readings_fake():
+            raise RuntimeError("all joints read exactly 0.0 - HEAL is probably in an ERROR state (fake readings). "
+                               "Restart: ./base_rigid (go home), ./heal_server, then the velocity launch. See INSTRUCTIONS H.")
         missing = [n for n in self.kin.joint_names if n not in self._js.name]
         if missing:
             raise RuntimeError(f"KDL joints {missing} not present in /joint_states names {list(self._js.name)}")
@@ -78,8 +81,18 @@ class RobotIO:
             raise RuntimeError(f"config robot.joint_names {bad} not in KDL chain {self.kin.joint_names}")
 
     # -- state ------------------------------------------------------------
+    def readings_fake(self) -> bool:
+        """True if every joint reads EXACTLY 0.0. HEAL publishes that after a robot error, even
+        though the arm is somewhere else. Real encoder readings at home are never exactly 0."""
+        js = self._js
+        return js is not None and len(js.position) > 0 and all(float(v) == 0.0 for v in js.position)
+
     def stale(self) -> bool:
-        return self._js is None or (time.monotonic() - self._js_wall) > self.timeout
+        """True if joint states are old OR look like the fake all-zero readings of an error state.
+        Every moving script stops when this is True."""
+        if self._js is None or (time.monotonic() - self._js_wall) > self.timeout:
+            return True
+        return self.readings_fake()
 
     def q(self) -> np.ndarray:
         """Joint positions in KDL chain order."""

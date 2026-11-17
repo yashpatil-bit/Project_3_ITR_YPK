@@ -703,6 +703,10 @@ Edit it with any text editor. Values are in metres, radians and seconds.
 | Problem | Fix |
 |---|---|
 | `Error while loading plugin "pytest11"` (launch_testing) | Use `./run_tests.sh` instead of `python3 -m pytest` |
+| `all joints read exactly 0.0 - HEAL is probably in an ERROR state` | After a robot error, `/joint_states` reports 0 deg for every joint although the arm is elsewhere. Our scripts refuse to move. Restart: T2 Ctrl-C; T1 Ctrl-C, `exit`, `sudo env HOME=/home/cobot ./cobot run`, `1`, `./base_rigid` (go home), Ctrl-C, `./heal_server`; then the T2 launch |
+| T2: `Failed to power on robot ... Robot fails to recover from error` | HEAL is still in its error state: check the E-stop is released and do the full restart above. If it persists, the TA must power-cycle the robot |
+| `move_joints`: `robot not following` | The arm is blocked (hit something?) or HEAL stopped it. Look at the arm, then T1/T2 for errors. Keep the wire box AWAY until the arm is at the start pose |
+| T1: `Safety error : Large Velocity for Joint` | A joint was commanded too fast for HEAL. All commands are capped at `robot.qdot_hard_limit` (0.25 rad/s); lower it if this still happens |
 | `ModuleNotFoundError` | `pip3 install -r requirements.txt`; make sure you are inside `~/ITR_2026/Grp8/final/Project_3_ITR_YPK` |
 | `Timed out waiting for: URDF` | Velocity controller (T2) not running, or the topic name differs: check `ros2 topic list`. Or save the URDF and use `--urdf file.urdf` |
 | `Timed out waiting for: JointState` | Robot program not running, or the terminal wasn't sourced (B2) |

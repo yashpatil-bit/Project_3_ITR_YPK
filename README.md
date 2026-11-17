@@ -39,6 +39,7 @@ flowchart LR
 | `hardware/buzz_contact/` | Optional Arduino sketch that reads the buzz-wire circuit as an objective contact sensor |
 | `starter_code/` | The course starter code, unchanged except for one bug fix (`ee_pose_topic` subscription was missing its topic argument) |
 | `docs/LAB_PLAYBOOK.md` | Session-by-session plan for the physical work, with troubleshooting |
+| `docs/LAB_STATUS.md` | **What we learned on the real robot and where we are** |
 | `docs/TODAY_IN_LAB.md` | **Step-by-step procedure for our actual setup** (threaded ring probe, U-bend wire, 2-finger gripper) |
 | `data/demos, processed, runs` | Recorded demos, processed trajectories and run logs (commit the real ones as evidence) |
 
