@@ -268,6 +268,8 @@ keyboard (Step 8). Free-drive is still useful for moving the arm roughly into pl
    | `w`/`s`, `a`/`d`, `r`/`f` | ±x, ±y, ±z (base axes) |
    | `n`/`m` | **Roll the ring about the gripper axis** (needed in every U-bend) |
    | `i`/`k`, `j`/`l`, `u`/`o` | Rotate about base x, y, z (small orientation fixes) |
+   | `[` / `]` | **Turn joint 6 only**: the gripper rotates in place about its own axis |
+   | `g` `g` | **Go home**: press `g` twice within 3 s, all joints slowly to 0°. The probe must be OFF the wire; any key cancels; refused if the path would go near the platform |
    | `c` | **Start/stop recording** (20 Hz) |
    | `h` | Hold: cancel pending steps |
    | `q` | Save and quit |

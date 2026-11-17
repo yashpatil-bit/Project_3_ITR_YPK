@@ -11,6 +11,8 @@ of the robot, so the arm stops within ~2 steps after you let go.
    Rotation about base axes       i/k : x        j/l : y        u/o : z
    ROLL about the gripper axis    n/m : (this is the ring roll in the U-bends)
    TURN JOINT 6 ONLY              [ / ] : gripper turns in place about its own axis (1/2 change the step)
+   GO HOME                        g g   : press g twice within 3 s -> all joints slowly to 0 deg
+                                          (probe must be OFF the wire / gripper open! any key cancels)
    1/2 : smaller/bigger steps     (0.5 / 1 / 2 / 5 mm  and  1 / 2 / 5 / 10 deg)
    c   : start/stop continuous RECORDING (20 Hz)  -> use this to teach the whole wire
    SPACE : add a single waypoint
@@ -37,6 +39,14 @@ from wire_trace.controller import dls, limit_qdot
 from wire_trace.ros_common import RobotIO
 from wire_trace.so3 import quat_error, quat_exp, quat_mul, quat_normalize, quat_to_rotmat
 from wire_trace.trajectory import Demo
+
+def lowest_point(kin, q):
+    """Lowest z among the arm's frames (ignoring the base-most ones) and the tool point."""
+    zs = [kin.fk(q)[0][2]]
+    if hasattr(kin, "frame_positions"):
+        zs += list(kin.frame_positions(q)[3:, 2])
+    return float(min(zs))
+
 
 LIN = {"w": (0, 1), "s": (0, -1), "a": (1, 1), "d": (1, -1), "r": (2, 1), "f": (2, -1)}
 ANG = {"i": (0, 1), "k": (0, -1), "j": (1, 1), "l": (1, -1), "u": (2, 1), "o": (2, -1)}
@@ -68,7 +78,8 @@ def main():
     last_rec = 0.0
     last_print = 0.0
     last_warn = 0.0
-    j6_target = None                          # joint-6-only jog target [rad]
+    joint_goal = None                         # joint-space goal (joint-6 jog or go-home) [rad]
+    last_g = -10.0
     old = termios.tcgetattr(sys.stdin)
     save = True
     print(__doc__)
@@ -109,16 +120,35 @@ def main():
                 elif c == " ":
                     record(now); print(f"  waypoint {len(P)}: {np.round(P[-1], 4)}")
                 elif c == "h":
-                    p_t, q_t = p.copy(), qq.copy(); j6_target = None; print("  hold")
+                    p_t, q_t = p.copy(), qq.copy(); joint_goal = None; print("  hold")
+                elif c == "g":
+                    if now - last_g > 3.0:
+                        last_g = now
+                        print("  GO HOME? Probe OFF the wire, gripper open, path clear -> press g again within 3 s")
+                    else:
+                        last_g = -10.0
+                        home = np.zeros(io.kin.n)
+                        low = min(lowest_point(io.kin, q + u * (home - q)) for u in np.linspace(0, 1, 40))
+                        if low < 0.08:
+                            print(f"  !! going home directly would bring the arm to {low*100:.1f} cm above the platform - "
+                                  "move up first (r), then try again")
+                        else:
+                            joint_goal = home
+                            print(f"  >>> GOING HOME (lowest point on the way {low*100:.0f} cm). Any key cancels.")
                 elif c in "[]":
-                    q6 = q[-1] if j6_target is None else j6_target
-                    if abs(q6 - q[-1]) < 2.0 * ang:
-                        new6 = q6 + (ang if c == "]" else -ang)
+                    base = q.copy() if joint_goal is None else joint_goal.copy()
+                    if abs(base[-1] - q[-1]) < 2.0 * ang:
+                        new6 = base[-1] + (ang if c == "]" else -ang)
                         if io.kin.lower[-1] + 0.1 < new6 < io.kin.upper[-1] - 0.1:
-                            j6_target = new6
-                            print(f"  joint 6 -> {np.degrees(j6_target):.0f} deg")
+                            base[-1] = new6
+                            joint_goal = base
+                            print(f"  joint 6 -> {np.degrees(new6):.0f} deg")
                         else:
                             print("  !! joint 6 limit")
+                elif joint_goal is not None and (c in LIN or c in ANG or c in ROLL):
+                    joint_goal = None
+                    p_t, q_t = p.copy(), qq.copy()
+                    print("  joint move cancelled")
                 elif c in LIN:
                     ax, sg = LIN[c]
                     if np.linalg.norm(p_t - p) < 2.0 * step:          # don't run ahead of the robot
@@ -140,15 +170,24 @@ def main():
             if np.linalg.norm(w) > w_cap:
                 w *= w_cap / np.linalg.norm(w)
             J = io.kin.jacobian(q)
-            if j6_target is not None:
-                # joint-6-only jog: everything else still, Cartesian target follows the robot
-                cmd = np.zeros(io.kin.n)
-                cmd[-1] = float(np.clip(2.0 * (j6_target - q[-1]), -0.12, 0.12))
+            if joint_goal is not None:
+                # joint-space move (joint-6 jog or go-home); Cartesian target follows the robot
+                err = joint_goal - q
+                cmd = 1.5 * err
+                peak = float(np.max(np.abs(cmd)))
+                if peak > 0.12:
+                    cmd *= 0.12 / peak
                 smin = 1.0
                 p_t, q_t = p.copy(), qq.copy()
-                if abs(j6_target - q[-1]) < 0.004:
-                    j6_target = None
-                    cmd[-1] = 0.0
+                if float(np.max(np.abs(err))) < 0.004:
+                    if not np.any(joint_goal):
+                        print("  >>> HOME reached")
+                    joint_goal = None
+                    cmd = np.zeros(io.kin.n)
+                elif lowest_point(io.kin, q) < 0.06:
+                    print("  !! arm close to the platform - joint move stopped")
+                    joint_goal = None
+                    cmd = np.zeros(io.kin.n)
             else:
                 cmd, smin, _ = dls(J, np.concatenate([v, w]), 0.02, 0.1, 0.04)
             cmd = limit_qdot(cmd, last, qdot_max, 0.5 * dt)
@@ -178,7 +217,7 @@ def main():
             if recording and now - last_rec >= 0.05:
                 last_rec = now
                 record(now)
-            moving = np.linalg.norm(e_lin) > 2e-4 or np.linalg.norm(e_ang) > 0.005
+            moving = np.linalg.norm(e_lin) > 2e-4 or np.linalg.norm(e_ang) > 0.005 or joint_goal is not None
             if now - last_print > 1.0 and (moving or recording):
                 last_print = now
                 zt = quat_to_rotmat(qq)[:, 2]
