@@ -30,7 +30,7 @@ from wire_trace.so3 import quat_error, rotmat_to_quat
 from wire_trace.synthetic import serpentine_wire
 
 
-def wire_poses(center, yaw, width, height, n_loops, roll0, step, mode="roll", pitch=0.0, plane=0.0):
+def wire_poses(center, yaw, width, height, n_loops, roll0, step, mode="roll", pitch=0.0, plane=0.0, tol_deg=40.0):
     """Ring-centre poses along a serpentine wire whose plane faces the robot base.
 
     mode "roll":  the ring rolls about the handle to stay exactly perpendicular to the wire
@@ -45,7 +45,7 @@ def wire_poses(center, yaw, width, height, n_loops, roll0, step, mode="roll", pi
     if mode == "alt":
         # "lazy" ring roll: keep the ring normal within +-TOL of the wire direction, rolling only
         # when needed -> about 90 deg of roll per top/bottom of each U, alternating +-45 deg
-        TOL = np.radians(40.0)
+        TOL = np.radians(tol_deg)
         sgn = 1.0 if np.cos(roll0) * np.sin(roll0) >= 0 else -1.0     # 45/225 -> +, 135/315 -> -
         flip = np.pi if np.cos(roll0) < 0 else 0.0                   # 225/135: same ring, gripper flipped
         alpha = np.empty_like(phi)
@@ -153,6 +153,9 @@ def main():
     ap.add_argument("--grip", nargs="*", default=["cross_y", "cross_x", "axial"], choices=list(GRIPS))
     ap.add_argument("--mode", nargs="*", default=["fixed", "roll"], choices=["fixed", "roll", "alt"],
                     help="fixed = constant probe orientation (ring tilted 45 deg), roll = full ring roll")
+    ap.add_argument("--tol", type=float, default=40.0,
+                    help="alt mode: how far [deg] the ring may be from perpendicular to the wire (ring opening "
+                         "w, wire d, clearance c: cos(tol) >= (d + 2c) / w)")
     ap.add_argument("--plane", type=float, nargs="*", default=[0, 90],
                     help="0 = wire plane faces the robot, 90 = wire runs towards the robot (edge-on)")
     ap.add_argument("--pitch", type=float, nargs="*", default=[0, 20, 40],
@@ -205,7 +208,7 @@ def main():
             yaw = np.radians(yaw_d)
             c = np.array([dist * np.sin(yaw), dist * np.cos(yaw), h])
             poses = wire_poses(c, yaw, a.width, a.wire_height, a.loops, np.radians(roll0_d), step,
-                               mode=mode, pitch=np.radians(pitch_d), plane=np.radians(plane_d))
+                               mode=mode, pitch=np.radians(pitch_d), plane=np.radians(plane_d), tol_deg=a.tol)
             # all distinct start solutions, best joint margin first
             sols = []
             for s0 in seeds:
