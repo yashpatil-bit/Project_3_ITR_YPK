@@ -46,8 +46,25 @@ def wire_poses(center, yaw, width, height, n_loops, roll0, step, mode="roll", pi
     """
     pts, phi = serpentine_wire(center=(0.0, 0.0, 0.0), n_loops=n_loops, width=width, height=height,
                                bend_r=0.02, ds=0.001)
-    w_roll = 0.05 if mode == "roll" else 0.0
-    seg = np.linalg.norm(np.diff(pts, axis=0), axis=1) + w_roll * np.abs(np.diff(phi))
+    if mode == "alt":
+        # "lazy" ring roll: keep the ring normal within +-TOL of the wire direction, rolling only
+        # when needed -> about 90 deg of roll per top/bottom of each U, alternating +-45 deg
+        TOL = np.radians(40.0)
+        sgn = 1.0 if np.cos(roll0) * np.sin(roll0) >= 0 else -1.0     # 45/225 -> +, 135/315 -> -
+        flip = np.pi if np.cos(roll0) < 0 else 0.0                   # 225/135: same ring, gripper flipped
+        alpha = np.empty_like(phi)
+        a_ = phi[0] - sgn * TOL
+        for k in range(len(phi)):
+            dlt = phi[k] - a_
+            if dlt > TOL:
+                a_ = phi[k] - TOL
+            elif dlt < -TOL:
+                a_ = phi[k] + TOL
+            alpha[k] = a_
+        alpha = alpha + flip
+    w_roll = 0.05 if mode in ("roll", "alt") else 0.0
+    ang_for_metric = alpha if mode == "alt" else phi
+    seg = np.linalg.norm(np.diff(pts, axis=0), axis=1) + w_roll * np.abs(np.diff(ang_for_metric))
     metric = np.concatenate([[0.0], np.cumsum(seg)])
     idx = np.unique(np.searchsorted(metric, np.arange(0.0, metric[-1], step)))
     idx = idx[idx < len(pts)]
@@ -63,7 +80,7 @@ def wire_poses(center, yaw, width, height, n_loops, roll0, step, mode="roll", pi
     poses = []
     for i in idx:
         p = center + pts[i, 1] * u + pts[i, 2] * zup
-        a = (phi[i] + roll0) if mode == "roll" else roll0
+        a = (phi[i] + roll0) if mode == "roll" else (alpha[i] if mode == "alt" else roll0)
         x = np.cos(a) * u + np.sin(a) * v
         y = np.cross(d, x)
         R = np.column_stack([x, y, d])
@@ -138,7 +155,7 @@ def main():
     ap.add_argument("--yaw", type=float, nargs="*", default=[0.0],
                     help="directions [deg] around the base (HEAL's base turns +-180, so one is enough)")
     ap.add_argument("--grip", nargs="*", default=["cross_y", "cross_x", "axial"], choices=list(GRIPS))
-    ap.add_argument("--mode", nargs="*", default=["fixed", "roll"], choices=["fixed", "roll"],
+    ap.add_argument("--mode", nargs="*", default=["fixed", "roll"], choices=["fixed", "roll", "alt"],
                     help="fixed = constant probe orientation (ring tilted 45 deg), roll = full ring roll")
     ap.add_argument("--plane", type=float, nargs="*", default=[0, 90],
                     help="0 = wire plane faces the robot, 90 = wire runs towards the robot (edge-on)")
@@ -205,7 +222,7 @@ def main():
     cands = []
     for grip in a.grip:
         for mode in a.mode:
-            rolls = (0, 90, 180, 270) if mode == "roll" else (45, 135, 225, 315)
+            rolls = (0, 90, 180, 270) if mode == "roll" else (45, 135, 225, 315)   # alt: start side / flip
             cands += [(grip, y, d, h, mode, pt, r0, pl) for y in a.yaw for d in a.dist for h in a.height
                       for pt in a.pitch for r0 in rolls for pl in a.plane]
     print(f"Searching {len(cands)} placements (ring {a.offset*100:.0f} cm from the grip point, "
