@@ -34,7 +34,7 @@ from wire_trace.so3 import quat_error, rotmat_to_quat
 from wire_trace.synthetic import serpentine_wire
 
 
-def wire_poses(center, yaw, width, height, n_loops, roll0, step, mode="roll", pitch=0.0):
+def wire_poses(center, yaw, width, height, n_loops, roll0, step, mode="roll", pitch=0.0, plane=0.0):
     """Ring-centre poses along a serpentine wire whose plane faces the robot base.
 
     mode "roll":  the ring rolls about the handle to stay exactly perpendicular to the wire
@@ -53,7 +53,9 @@ def wire_poses(center, yaw, width, height, n_loops, roll0, step, mode="roll", pi
     idx = idx[idx < len(pts)]
     if idx[-1] != len(pts) - 1:
         idx = np.append(idx, len(pts) - 1)
-    radial = np.array([np.sin(yaw), np.cos(yaw), 0.0])     # wire-plane normal (robot -> wire)
+    # wire-plane normal: plane=0 -> the wire FACES the robot (normal = robot->wire direction);
+    # plane=90 deg -> the wire runs TOWARDS the robot (plane edge-on, normal sideways)
+    radial = np.array([np.sin(yaw + plane), np.cos(yaw + plane), 0.0])
     zup = np.array([0.0, 0.0, 1.0])
     u = np.cross(zup, radial)                               # in-plane horizontal
     d = np.cos(pitch) * radial - np.sin(pitch) * zup        # handle direction = tool z
@@ -138,6 +140,8 @@ def main():
     ap.add_argument("--grip", nargs="*", default=["cross_y", "cross_x", "axial"], choices=list(GRIPS))
     ap.add_argument("--mode", nargs="*", default=["fixed", "roll"], choices=["fixed", "roll"],
                     help="fixed = constant probe orientation (ring tilted 45 deg), roll = full ring roll")
+    ap.add_argument("--plane", type=float, nargs="*", default=[0, 90],
+                    help="0 = wire plane faces the robot, 90 = wire runs towards the robot (edge-on)")
     ap.add_argument("--pitch", type=float, nargs="*", default=[0, 20, 40],
                     help="candidate downward tilts of the handle [deg]")
     ap.add_argument("--table-z", type=float, default=0.0, help="keep arm frames above this z [m]")
@@ -168,12 +172,12 @@ def main():
     def search(cands, step, n_try, label, max_jump):
         out = []
         for n, cand in enumerate(cands, 1):
-            grip, yaw_d, dist, h, mode, pitch_d, roll0_d = cand
+            grip, yaw_d, dist, h, mode, pitch_d, roll0_d, plane_d = cand
             kin = kins[grip]
             yaw = np.radians(yaw_d)
             c = np.array([dist * np.sin(yaw), dist * np.cos(yaw), h])
             poses = wire_poses(c, yaw, a.width, a.wire_height, a.loops, np.radians(roll0_d), step,
-                               mode=mode, pitch=np.radians(pitch_d))
+                               mode=mode, pitch=np.radians(pitch_d), plane=np.radians(plane_d))
             # all distinct start solutions, best joint margin first
             sols = []
             for s0 in seeds:
@@ -202,8 +206,8 @@ def main():
     for grip in a.grip:
         for mode in a.mode:
             rolls = (0, 90, 180, 270) if mode == "roll" else (45, 135, 225, 315)
-            cands += [(grip, y, d, h, mode, pt, r0) for y in a.yaw for d in a.dist for h in a.height
-                      for pt in a.pitch for r0 in rolls]
+            cands += [(grip, y, d, h, mode, pt, r0, pl) for y in a.yaw for d in a.dist for h in a.height
+                      for pt in a.pitch for r0 in rolls for pl in a.plane]
     print(f"Searching {len(cands)} placements (ring {a.offset*100:.0f} cm from the grip point, "
           f"wire {a.width*100:.0f} x {a.wire_height*100:.0f} cm, {a.loops} loops). Coarse pass ...")
     coarse = search(cands, 0.025, 2, "coarse", 1.0)
@@ -217,18 +221,20 @@ def main():
         print("\nNo feasible placement found. Send Claude this whole output (failure reasons above).")
         return
     print(f"\n{len(results)} feasible placements. Best 12 (higher score = more margin):")
-    print(" rank  grip     mode   pitch  dist  height  roll0  margin  sigma_min  joints at start (deg)")
+    print(" rank  grip     wire    mode   pitch  dist  height  roll0  margin  sigma_min  joints at start (deg)")
     for i, (sc, cand, info) in enumerate(results[:12]):
-        grip, yaw_d, dist, h, mode, pitch_d, roll0_d = cand
-        print(f" {i+1:4d}  {grip:7s}  {mode:5s}  {pitch_d:4.0f}  {dist:4.2f}  {h:5.2f}   {roll0_d:4.0f}  "
+        grip, yaw_d, dist, h, mode, pitch_d, roll0_d, plane_d = cand
+        wire = "facing" if plane_d == 0 else "towards"
+        print(f" {i+1:4d}  {grip:7s}  {wire:7s} {mode:5s}  {pitch_d:4.0f}  {dist:4.2f}  {h:5.2f}   {roll0_d:4.0f}  "
               f"{np.degrees(info['margin']):5.0f}deg  {info['smin']:.3f}     {np.round(np.degrees(info['q0'])).astype(int).tolist()}")
     sc, cand, info = results[0]
-    grip, yaw_d, dist, h, mode, pitch_d, roll0_d = cand
+    grip, yaw_d, dist, h, mode, pitch_d, roll0_d, plane_d = cand
     np.save(data_dir("wire_start_q.npy"), info["q0"])
     np.save(data_dir("wire_path_q.npy"), info["qs"])
-    print(f"\nBEST: grip '{grip}', {mode} orientation, handle tilted {pitch_d:.0f} deg down, ring roll {roll0_d:.0f} deg")
+    print(f"\nBEST: grip '{grip}', wire {'FACING the robot' if plane_d == 0 else 'running TOWARDS the robot'}, "
+          f"{mode} orientation, handle tilted {pitch_d:.0f} deg down, ring roll {roll0_d:.0f} deg")
     print(f"  wire centre {dist*100:.0f} cm horizontally from the robot base axis, {h*100:.0f} cm above the robot's")
-    print("  mounting surface, wire plane FACING the robot (any direction around the base).")
+    print("  mounting surface (any direction around the base).")
     print(f"Start joint angles -> data/wire_start_q.npy  ({np.round(np.degrees(info['q0']), 1).tolist()} deg)")
 
 
