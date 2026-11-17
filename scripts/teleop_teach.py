@@ -10,6 +10,7 @@ of the robot, so the arm stops within ~2 steps after you let go.
    Position (base_link axes)      w/s : +x/-x    a/d : +y/-y    r/f : +z/-z
    Rotation about base axes       i/k : x        j/l : y        u/o : z
    ROLL about the gripper axis    n/m : (this is the ring roll in the U-bends)
+   TURN JOINT 6 ONLY              [ / ] : gripper turns in place about its own axis (1/2 change the step)
    1/2 : smaller/bigger steps     (0.5 / 1 / 2 / 5 mm  and  1 / 2 / 5 / 10 deg)
    c   : start/stop continuous RECORDING (20 Hz)  -> use this to teach the whole wire
    SPACE : add a single waypoint
@@ -67,6 +68,7 @@ def main():
     last_rec = 0.0
     last_print = 0.0
     last_warn = 0.0
+    j6_target = None                          # joint-6-only jog target [rad]
     old = termios.tcgetattr(sys.stdin)
     save = True
     print(__doc__)
@@ -107,7 +109,16 @@ def main():
                 elif c == " ":
                     record(now); print(f"  waypoint {len(P)}: {np.round(P[-1], 4)}")
                 elif c == "h":
-                    p_t, q_t = p.copy(), qq.copy(); print("  hold")
+                    p_t, q_t = p.copy(), qq.copy(); j6_target = None; print("  hold")
+                elif c in "[]":
+                    q6 = q[-1] if j6_target is None else j6_target
+                    if abs(q6 - q[-1]) < 2.0 * ang:
+                        new6 = q6 + (ang if c == "]" else -ang)
+                        if io.kin.lower[-1] + 0.1 < new6 < io.kin.upper[-1] - 0.1:
+                            j6_target = new6
+                            print(f"  joint 6 -> {np.degrees(j6_target):.0f} deg")
+                        else:
+                            print("  !! joint 6 limit")
                 elif c in LIN:
                     ax, sg = LIN[c]
                     if np.linalg.norm(p_t - p) < 2.0 * step:          # don't run ahead of the robot
@@ -129,7 +140,17 @@ def main():
             if np.linalg.norm(w) > w_cap:
                 w *= w_cap / np.linalg.norm(w)
             J = io.kin.jacobian(q)
-            cmd, smin, _ = dls(J, np.concatenate([v, w]), 0.02, 0.1, 0.04)
+            if j6_target is not None:
+                # joint-6-only jog: everything else still, Cartesian target follows the robot
+                cmd = np.zeros(io.kin.n)
+                cmd[-1] = float(np.clip(2.0 * (j6_target - q[-1]), -0.12, 0.12))
+                smin = 1.0
+                p_t, q_t = p.copy(), qq.copy()
+                if abs(j6_target - q[-1]) < 0.004:
+                    j6_target = None
+                    cmd[-1] = 0.0
+            else:
+                cmd, smin, _ = dls(J, np.concatenate([v, w]), 0.02, 0.1, 0.04)
             cmd = limit_qdot(cmd, last, qdot_max, 0.5 * dt)
             warn = None
             # 1) the robot cannot follow the target (singularity / limits): hold instead of wandering
