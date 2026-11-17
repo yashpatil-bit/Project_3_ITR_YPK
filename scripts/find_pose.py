@@ -24,12 +24,8 @@ from collections import Counter
 
 import _path  # noqa: F401
 import numpy as np
-import rclpy
-from rclpy.node import Node
 
 from wire_trace.config import data_dir, load_config
-from wire_trace.kdl_kinematics import KDLKinematics
-from wire_trace.ros_common import RobotIO
 from wire_trace.so3 import quat_error, rotmat_to_quat
 from wire_trace.synthetic import serpentine_wire
 
@@ -164,18 +160,33 @@ def main():
     ap.add_argument("--table-z", type=float, default=0.0, help="keep arm frames above this z [m]")
     ap.add_argument("--step", type=float, default=0.01, help="check every N metres along the wire")
     ap.add_argument("--config", default=None)
+    ap.add_argument("--chain", default=None,
+                    help="run OFFLINE (no ROS) with a chain file, e.g. config/heal_chain.json")
     a = ap.parse_args()
     cfg = load_config(a.config)
 
-    rclpy.init()
-    node = Node("wire_trace_find_pose")
-    io = RobotIO(node, cfg, need_command=False)
-    io.wait_ready()
     r = cfg["robot"]
-    kins = {g: KDLKinematics(io._urdf, r["base_link"], r["tip_link"],
-                             tuple(a.offset * np.array(GRIPS[g][1])), GRIPS[g][0]) for g in a.grip}
-    lo, hi = io.kin.lower, io.kin.upper
-    q_now = io.q()
+    node = None
+    if a.chain:
+        from wire_trace.urdf_chain import ChainKinematics
+        kins = {g: ChainKinematics(a.chain, tuple(a.offset * np.array(GRIPS[g][1])), GRIPS[g][0]) for g in a.grip}
+        any_k = next(iter(kins.values()))
+        lo, hi = any_k.lower, any_k.upper
+        q_now = np.zeros(any_k.n)
+    else:
+        import rclpy
+        from rclpy.node import Node
+
+        from wire_trace.kdl_kinematics import KDLKinematics
+        from wire_trace.ros_common import RobotIO
+        rclpy.init()
+        node = Node("wire_trace_find_pose")
+        io = RobotIO(node, cfg, need_command=False)
+        io.wait_ready()
+        kins = {g: KDLKinematics(io._urdf, r["base_link"], r["tip_link"],
+                                 tuple(a.offset * np.array(GRIPS[g][1])), GRIPS[g][0]) for g in a.grip}
+        lo, hi = io.kin.lower, io.kin.upper
+        q_now = io.q()
     rng = np.random.default_rng(0)
     seeds = [q_now, np.zeros(6)] + [rng.uniform(lo * 0.9, hi * 0.9) for _ in range(22)]
     any_kin = next(iter(kins.values()))
@@ -231,8 +242,10 @@ def main():
     print(f"Coarse pass: {len(coarse)} feasible.   Failure reasons: {dict(reasons)}")
     results = search([cand for _, cand, _ in coarse[:25]], a.step, 4, "fine", 0.5) if coarse else []
     print(f"Done in {time.time()-t0:.0f} s")
-    node.destroy_node()
-    rclpy.shutdown()
+    if node is not None:
+        import rclpy
+        node.destroy_node()
+        rclpy.shutdown()
 
     if not results:
         print("\nNo feasible placement found. Send Claude this whole output (failure reasons above).")
