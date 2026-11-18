@@ -206,3 +206,38 @@ class TrackingController:
         else:
             self.last_qdot = self.last_qdot * (1.0 - step / mag)
         return self.last_qdot.copy()
+
+
+class StallDetector:
+    """Detects 'commanded but not moving': the robot is blocked (e.g. the probe pressing on
+    the wire). HEAL keeps trying and, when the joint finally slips, trips its own
+    'Large Velocity for Joint' safety error. Stop BEFORE that happens.
+
+    update() returns (True, joint_index) when, over the last `window` seconds, some joint was
+    commanded to move at least `min_expected` rad but actually moved less than `ratio` of that.
+    """
+
+    def __init__(self, window: float = 0.6, min_expected: float = 0.012, ratio: float = 0.3):
+        from collections import deque
+        self.window, self.min_expected, self.ratio = window, min_expected, ratio
+        self.buf = deque()
+
+    def reset(self):
+        self.buf.clear()
+
+    def update(self, t: float, q: np.ndarray, cmd_sent: np.ndarray):
+        self.buf.append((t, np.asarray(q, float).copy(), np.asarray(cmd_sent, float).copy()))
+        while self.buf and t - self.buf[0][0] > self.window:
+            self.buf.popleft()
+        if len(self.buf) < 5 or t - self.buf[0][0] < 0.8 * self.window:
+            return False, None
+        ts = np.array([b[0] for b in self.buf])
+        C = np.array([b[2] for b in self.buf])
+        expected = np.sum(C[:-1] * np.diff(ts)[:, None], axis=0)
+        actual = self.buf[-1][1] - self.buf[0][1]
+        j = int(np.argmax(np.abs(expected)))
+        if abs(expected[j]) < self.min_expected:
+            return False, None
+        if actual[j] * np.sign(expected[j]) < self.ratio * abs(expected[j]):
+            return True, j
+        return False, None

@@ -10,7 +10,8 @@ of the robot, so the arm stops within ~2 steps after you let go.
    Position (base_link axes)      w/s : +x/-x    a/d : +y/-y    r/f : +z/-z
    Rotation about base axes       i/k : x        j/l : y        u/o : z
    ROLL about the gripper axis    n/m : (this is the ring roll in the U-bends)
-   TURN JOINT 6 ONLY              [ / ] : gripper turns in place about its own axis (1/2 change the step)
+   TURN about the GRIPPER AXIS    [ / ] : ring turns in place (rotation about the gripper axis, ring centre fixed)
+   TURN JOINT 6 ONLY              { / } : only with the probe OFF the wire (swings the handle)
    GO HOME                        g g   : press g twice within 3 s -> all joints slowly to 0 deg
                                           (probe must be OFF the wire / gripper open! any key cancels)
    1/2 : smaller/bigger steps     (0.5 / 1 / 2 / 5 mm  and  1 / 2 / 5 / 10 deg)
@@ -35,7 +36,7 @@ import rclpy
 from rclpy.node import Node
 
 from wire_trace.config import data_dir, load_config
-from wire_trace.controller import dls, limit_qdot
+from wire_trace.controller import StallDetector, dls, limit_qdot
 from wire_trace.ros_common import RobotIO
 from wire_trace.so3 import quat_error, quat_exp, quat_mul, quat_normalize, quat_to_rotmat
 from wire_trace.trajectory import Demo
@@ -53,6 +54,7 @@ ANG = {"i": (0, 1), "k": (0, -1), "j": (1, 1), "l": (1, -1), "u": (2, 1), "o": (
 ROLL = {"n": 1, "m": -1}
 STEP_MM = [0.5, 1.0, 2.0, 5.0]
 STEP_DEG = [1.0, 2.0, 5.0, 10.0]
+TOOL_R = np.eye(3)
 
 
 def main():
@@ -67,6 +69,9 @@ def main():
     io = RobotIO(node, cfg)
     io.wait_ready(urdf_file=a.urdf)
     dt = 1.0 / float(cfg["robot"]["rate_hz"])
+    global TOOL_R
+    from wire_trace.urdf_chain import _rpy
+    TOOL_R = _rpy(*cfg["robot"].get("tool_rpy", [0.0, 0.0, 0.0]))
     si = 1
     kp_lin, kp_ang = 3.0, 3.0
     v_cap, w_cap = 0.01, 0.05                 # m/s, rad/s (HEAL safety trips on fast wrist motion)
@@ -79,6 +84,7 @@ def main():
     last_print = 0.0
     last_warn = 0.0
     joint_goal = None                         # joint-space goal (joint-6 jog or go-home) [rad]
+    stall = StallDetector()
     last_g = -10.0
     old = termios.tcgetattr(sys.stdin)
     save = True
@@ -135,17 +141,17 @@ def main():
                         else:
                             joint_goal = home
                             print(f"  >>> GOING HOME (lowest point on the way {low*100:.0f} cm). Any key cancels.")
-                elif c in "[]":
+                elif c in "{}":
                     base = q.copy() if joint_goal is None else joint_goal.copy()
                     if abs(base[-1] - q[-1]) < 2.0 * ang:
-                        new6 = base[-1] + (ang if c == "]" else -ang)
+                        new6 = base[-1] + (ang if c == "}" else -ang)
                         if io.kin.lower[-1] + 0.1 < new6 < io.kin.upper[-1] - 0.1:
                             base[-1] = new6
                             joint_goal = base
                             print(f"  joint 6 -> {np.degrees(new6):.0f} deg")
                         else:
                             print("  !! joint 6 limit")
-                elif joint_goal is not None and (c in LIN or c in ANG or c in ROLL):
+                elif joint_goal is not None and (c in LIN or c in ANG or c in ROLL or c in "[]"):
                     joint_goal = None
                     p_t, q_t = p.copy(), qq.copy()
                     print("  joint move cancelled")
@@ -153,12 +159,16 @@ def main():
                     ax, sg = LIN[c]
                     if np.linalg.norm(p_t - p) < 2.0 * step:          # don't run ahead of the robot
                         p_t = p_t.copy(); p_t[ax] += sg * step
-                elif c in ANG or c in ROLL:
+                elif c in ANG or c in ROLL or c in "[]":
                     if np.linalg.norm(quat_error(q_t, qq)) < 2.0 * ang:
                         if c in ANG:
                             axv = np.zeros(3); ax, sg = ANG[c]; axv[ax] = sg
+                        elif c in ROLL:
+                            axv = quat_to_rotmat(q_t)[:, 2] * ROLL[c]     # handle axis (controlled frame z)
                         else:
-                            axv = quat_to_rotmat(q_t)[:, 2] * ROLL[c]     # gripper (tool z) axis
+                            # gripper approach axis (rq_tool_tip z) expressed through the configured tool rotation
+                            axv = quat_to_rotmat(q_t) @ TOOL_R.T @ np.array([0.0, 0.0, 1.0])
+                            axv = axv * (1.0 if c == "]" else -1.0)
                         q_t = quat_normalize(quat_mul(quat_exp(axv * ang), q_t))
 
             e_lin = p_t - p
@@ -205,6 +215,13 @@ def main():
             bad = ((q_next < lo) & (cmd < 0)) | ((q_next > hi) & (cmd > 0))
             if np.any(bad):
                 warn = f"joint(s) {[int(j) + 1 for j in np.where(bad)[0]]} near their limit - HOLDING. Try another direction"
+            # 4) BLOCKED: commanded but not moving (probe pressing on the wire) -> stop before HEAL trips
+            blocked, bj = stall.update(now, q, last)
+            if blocked:
+                warn = (f"BLOCKED: joint {bj + 1} is not moving as commanded - the probe is probably pressing on "
+                        "the wire. Stopped. Move the other way / re-centre the ring")
+                joint_goal = None
+                stall.reset()
             if warn is not None:
                 cmd = np.zeros_like(cmd)
                 p_t, q_t = p.copy(), qq.copy()        # drop the unreachable target

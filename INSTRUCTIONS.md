@@ -268,7 +268,8 @@ keyboard (Step 8). Free-drive is still useful for moving the arm roughly into pl
    | `w`/`s`, `a`/`d`, `r`/`f` | ±x, ±y, ±z (base axes) |
    | `n`/`m` | **Roll the ring about the gripper axis** (needed in every U-bend) |
    | `i`/`k`, `j`/`l`, `u`/`o` | Rotate about base x, y, z (small orientation fixes) |
-   | `[` / `]` | **Turn joint 6 only**: the gripper rotates in place about its own axis |
+   | `[` / `]` | **Turn the ring in place** about the gripper axis (ring centre stays fixed) |
+   | `{` / `}` | Turn joint 6 only. **Probe OFF the wire only**, because it swings the handle |
    | `g` `g` | **Go home**: press `g` twice within 3 s, all joints slowly to 0°. The probe must be OFF the wire; any key cancels; refused if the path would go near the platform |
    | `c` | **Start/stop recording** (20 Hz) |
    | `h` | Hold: cancel pending steps |
@@ -708,6 +709,7 @@ Edit it with any text editor. Values are in metres, radians and seconds.
 | `all joints read exactly 0.0 - HEAL is probably in an ERROR state` | After a robot error, `/joint_states` reports 0 deg for every joint although the arm is elsewhere. Our scripts refuse to move. Restart: T2 Ctrl-C; T1 Ctrl-C, `exit`, `sudo env HOME=/home/cobot ./cobot run`, `1`, `./base_rigid` (go home), Ctrl-C, `./heal_server`; then the T2 launch |
 | T2: `Failed to power on robot ... Robot fails to recover from error` | HEAL is still in its error state: check the E-stop is released and do the full restart above. If it persists, the TA must power-cycle the robot |
 | `move_joints`: `robot not following` | The arm is blocked (hit something?) or HEAL stopped it. Look at the arm, then T1/T2 for errors. Keep the wire box AWAY until the arm is at the start pose |
+| Jog tool: `!! BLOCKED: joint N is not moving as commanded` | The probe is pressing on the wire (or the arm on something). The tool stopped **before** HEAL trips. Move the other way / re-centre the ring |
 | T1: `Safety error : Large Velocity for Joint` | A joint was commanded too fast for HEAL. All commands are capped at `robot.qdot_hard_limit` (0.25 rad/s); lower it if this still happens |
 | `ModuleNotFoundError` | `pip3 install -r requirements.txt`; make sure you are inside `~/ITR_2026/Grp8/final/Project_3_ITR_YPK` |
 | `Timed out waiting for: URDF` | Velocity controller (T2) not running, or the topic name differs: check `ros2 topic list`. Or save the URDF and use `--urdf file.urdf` |

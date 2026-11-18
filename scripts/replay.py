@@ -27,7 +27,7 @@ from rclpy.node import Node
 from std_msgs.msg import Bool
 
 from wire_trace.config import controller_params, data_dir, load_config
-from wire_trace.controller import TrackingController
+from wire_trace.controller import StallDetector, TrackingController
 from wire_trace.plotting import plot_run
 from wire_trace.ros_common import RobotIO, confirm
 from wire_trace.runlog import RunLog
@@ -99,6 +99,8 @@ def main():
 
         t0 = time.monotonic()
         t_run0["t"] = t0
+        stall = StallDetector()
+        last_sent = np.zeros(io.kin.n)
         next_tick = t0
         status = "running"
         while rclpy.ok():
@@ -134,7 +136,12 @@ def main():
             if a.dry_run:
                 q_virtual = q_virtual + r.qdot * dt
             else:
+                blocked, bj = stall.update(now - t0, q, last_sent)
+                if blocked:
+                    status, reason = "abort", f"robot blocked: joint {bj + 1} not moving as commanded (contact?)"
+                    break
                 io.publish_qdot(r.qdot)
+                last_sent = r.qdot
     except KeyboardInterrupt:
         status, reason = "abort", "Ctrl-C"
     except RuntimeError as e:

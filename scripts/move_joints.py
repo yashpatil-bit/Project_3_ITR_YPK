@@ -22,7 +22,7 @@ import rclpy
 from rclpy.node import Node
 
 from wire_trace.config import load_config
-from wire_trace.controller import dls, limit_qdot
+from wire_trace.controller import StallDetector, dls, limit_qdot
 from wire_trace.quintic import QuinticJointSpacePlanner
 from wire_trace.ros_common import RobotIO, confirm
 from wire_trace.so3 import quat_error
@@ -119,6 +119,7 @@ def main():
         # ---- stage 1: quintic joint move ---------------------------------------------
         planner = QuinticJointSpacePlanner(q0, q_app, T)
         qdot_max = np.full(kin.n, a.max_joint_speed * 1.3)
+        stall = StallDetector()
         last = np.zeros(kin.n)
         t0 = time.monotonic()
         next_tick = t0
@@ -139,6 +140,9 @@ def main():
                 raise RuntimeError(f"robot not following (joint error {np.degrees(np.max(np.abs(err))):.1f} deg) - blocked or stopped?")
             if lowest_point(kin, q) < a.min_clear * 0.8:
                 raise RuntimeError("arm unexpectedly close to the platform - stopping")
+            blocked, bj = stall.update(t, q, last)
+            if blocked:
+                raise RuntimeError(f"robot blocked: joint {bj + 1} not moving as commanded - hit something?")
             cmd = limit_qdot(qdd + 1.5 * err, last, qdot_max, 0.6 * dt)
             last = cmd
             io.publish_qdot(cmd)

@@ -216,3 +216,29 @@ def test_serpentine_ring_roll():
     a = log.arrays()
     assert status == "done", reason
     assert a["e_pos"].max() < 0.002 and np.degrees(a["e_ori"].max()) < 8.0
+
+
+def test_stall_detector():
+    from wire_trace.controller import StallDetector
+    dt = 0.01
+    # robot follows the command (with a little lag) -> never "blocked"
+    det, q = StallDetector(), np.zeros(6)
+    cmd = np.array([0, 0, 0, 0, 0, 0.04])
+    qdot = np.zeros(6)
+    for k in range(300):
+        qdot += 0.3 * (cmd - qdot)
+        q = q + qdot * dt
+        assert not det.update(k * dt, q, cmd)[0]
+    # robot blocked (does not move) -> detected within about a second
+    det, q = StallDetector(), np.zeros(6)
+    hit = None
+    for k in range(150):
+        b, j = det.update(k * dt, q, cmd)
+        if b:
+            hit = (k, j)
+            break
+    assert hit is not None and hit[1] == 5 and hit[0] * dt < 1.0
+    # tiny commands (holding still) never trigger
+    det = StallDetector()
+    for k in range(300):
+        assert not det.update(k * dt, np.zeros(6), np.full(6, 0.005))[0]
