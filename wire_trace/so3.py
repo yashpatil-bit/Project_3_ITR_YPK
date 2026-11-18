@@ -92,18 +92,25 @@ def quat_interp(s_knots: np.ndarray, qs: np.ndarray, s_query: np.ndarray) -> np.
 
 
 def smooth_quaternions(qs: np.ndarray, sigma_samples: float) -> np.ndarray:
-    """Gaussian smoothing of a quaternion sequence in the tangent space of a running mean.
-
-    Works well for the small rotation changes seen when hand-guiding a probe.
+    """Gaussian smoothing of a quaternion sequence, done LOCALLY: every sample is averaged
+    with its neighbours in its own tangent space. Works for any total rotation (e.g. the
+    probe ring rolling 180 deg through every U-bend of the wire) - a global reference would
+    wrap around at 180 deg.
     """
     qs = quat_make_continuous(qs)
-    if sigma_samples <= 0 or len(qs) < 3:
+    n = len(qs)
+    if sigma_samples <= 0 or n < 3:
         return qs
-    # express every quat relative to the first, smooth rotation vectors, map back
-    ref = qs[0]
-    rv = quat_log(quat_mul(qs, quat_conj(np.broadcast_to(ref, qs.shape))))
-    rv_s = gaussian_filter1d_edge(rv, sigma_samples)
-    return quat_make_continuous(quat_mul(quat_exp(rv_s), np.broadcast_to(ref, qs.shape)))
+    r = max(1, int(round(3 * sigma_samples)))
+    k = np.exp(-0.5 * (np.arange(-r, r + 1) / sigma_samples) ** 2)
+    out = np.empty_like(qs)
+    for i in range(n):
+        ri = min(r, i, n - 1 - i)          # symmetric window -> no bias at the ends, ends pinned
+        idx = np.arange(i - ri, i + ri + 1)
+        kk = k[r - ri: r + ri + 1]
+        rel = quat_log(quat_mul(qs[idx], quat_conj(np.broadcast_to(qs[i], (len(idx), 4)))))
+        out[i] = quat_mul(quat_exp((kk[:, None] * rel).sum(0) / kk.sum()), qs[i])
+    return quat_make_continuous(out)
 
 
 def gaussian_filter1d_edge(x: np.ndarray, sigma: float) -> np.ndarray:

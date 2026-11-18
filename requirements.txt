@@ -4,6 +4,7 @@ numpy>=1.21
 scipy>=1.8
 matplotlib>=3.5
 pyyaml>=5.4
-pytest>=7
+# pytest is only for running the tests on your OWN laptop (pip3 install pytest).
+# Do NOT pip-install pytest on the shared lab PC: it overrides the ROS one and breaks launch_testing.
 # optional: Arduino contact sensor (scripts/contact_monitor.py --mode serial)
 # pyserial>=3.5

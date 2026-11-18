@@ -6,3 +6,5 @@ data/sim/
 data/demos/sim_demo*.npz
 data/runs/pytest*
 data/runs/dry_*
+data/wire_start_q.npy
+data/wire_path_q.npy

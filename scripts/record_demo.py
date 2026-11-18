@@ -39,7 +39,7 @@ def main():
     keys = KeyReader()
 
     print("\n=== TEACH MODE ===")
-    print("1. Robot must be in free-drive / gravity-compensation mode (./free_drive).")
+    print("1. HEAL must be running ./free_drive (step 4 of the starter README, see README section 2).")
     print("2. Buddy: hand on the E-stop.  Operator: place probe at the START of the wire.")
     print("3. Press Enter to START, guide slowly and steadily (2-5 mm clearance), Enter to STOP.")
     print("   (type q + Enter to abort without saving)\n")

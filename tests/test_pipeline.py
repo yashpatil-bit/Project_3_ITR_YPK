@@ -186,10 +186,59 @@ def test_scripts_with_fake_robot(tmp_path):
 
     run("tools/fake_robot.py", "--make-demo")
     out_traj = str(tmp_path / "t.npz")
-    run("scripts/process_demo.py", "data/demos/sim_demo.npz", "--vmax", "0.15", "--amax", "0.4",
-        "--alat", "0.4", "--out", out_traj, "--no-plot")
+    run("scripts/process_demo.py", "data/demos/sim_demo.npz", "--vmax", "0.10", "--amax", "0.1",
+        "--alat", "0.1", "--out", out_traj, "--no-plot")
     out = run("tools/fake_robot.py", "scripts/replay.py", out_traj, "--yes", "--tag", "pytest_refuse")
     assert "go_to_start" in out
-    run("tools/fake_robot.py", "scripts/go_to_start.py", out_traj, "--yes")
+    run("tools/fake_robot.py", "scripts/go_to_start.py", out_traj, "--yes", "--max-dist", "0.5")
     out = run("tools/fake_robot.py", "scripts/replay.py", out_traj, "--speed", "1.0", "--yes", "--tag", "pytest")
     assert "status   : DONE" in out
+
+
+# ---------------------------------------------------------------- lab wire geometry (U-bends, ring roll)
+def test_large_rotation_smoothing():
+    from wire_trace.so3 import smooth_quaternions
+    ang = np.radians(np.linspace(0, 540, 600))
+    base = quat_exp(np.array([0, 0.3, 0]))
+    qs = np.array([quat_mul(quat_exp(np.array([a, 0, 0])), base) for a in ang])
+    sm = smooth_quaternions(qs, 5.0)
+    err = max(np.linalg.norm(quat_error(a, b)) for a, b in zip(qs, sm))
+    assert np.degrees(err) < 1.0
+
+
+def test_serpentine_ring_roll():
+    from wire_trace.synthetic import ring_demo
+    d, wire = ring_demo(SimArm(noise=1e-5))
+    tr = process_demo(d, ProcessParams(v_max=0.08, a_max=0.2, a_lat_max=0.2, w_max=1.0), verbose=False)
+    arm = SimArm(noise=1e-5, lag=0.03)
+    place_at_start(arm, tr)
+    log, status, reason = simulate(tr, arm, ControllerParams(speed_scale=1.0, qdot_max=(1.0, 1.0, 1.0, 1.5, 1.5, 2.0)))
+    a = log.arrays()
+    assert status == "done", reason
+    assert a["e_pos"].max() < 0.002 and np.degrees(a["e_ori"].max()) < 8.0
+
+
+def test_stall_detector():
+    from wire_trace.controller import StallDetector
+    dt = 0.01
+    # robot follows the command (with a little lag) -> never "blocked"
+    det, q = StallDetector(), np.zeros(6)
+    cmd = np.array([0, 0, 0, 0, 0, 0.04])
+    qdot = np.zeros(6)
+    for k in range(300):
+        qdot += 0.3 * (cmd - qdot)
+        q = q + qdot * dt
+        assert not det.update(k * dt, q, cmd)[0]
+    # robot blocked (does not move) -> detected within about a second
+    det, q = StallDetector(), np.zeros(6)
+    hit = None
+    for k in range(150):
+        b, j = det.update(k * dt, q, cmd)
+        if b:
+            hit = (k, j)
+            break
+    assert hit is not None and hit[1] == 5 and hit[0] * dt < 1.0
+    # tiny commands (holding still) never trigger
+    det = StallDetector()
+    for k in range(300):
+        assert not det.update(k * dt, np.zeros(6), np.full(6, 0.005))[0]

@@ -43,6 +43,7 @@ class ControllerParams:
     lag_soft: float = 0.010        # m   along-path lag tolerated before slowing the reference
     lag_abort: float = 0.030       # m   abort if the robot lags the reference by more than this
     ori_err_abort: float = 0.20    # rad abort above this orientation error
+    ori_err_soft: float = 0.05     # rad start slowing the reference above this orientation error
     k_min: float = 0.2             # minimum reference-speed factor when slowing down
     start_tol: float = 0.005       # m   must be this close to the start pose to begin
     done_tol: float = 0.0015       # m   final position tolerance
@@ -156,12 +157,27 @@ class TrackingController:
             k = float(np.clip(k, p.k_min, 1.0))
         else:
             k = 1.0
+        if eon > p.ori_err_soft:            # also wait for the wrist (ring roll in the U-bends)
+            k_o = 1.0 - (eon - p.ori_err_soft) / max(p.ori_err_abort - p.ori_err_soft, 1e-9)
+            k = float(np.clip(min(k, k_o), p.k_min, 1.0))
         info["k"] = k
         ff = k * p.speed_scale if self.tau < T else 0.0
 
-        twist = np.concatenate([ff * v_d + p.kp_pos * e_pos, ff * w_d + p.kp_ori * e_ori])
-        qdot, smin, lam = dls(J, twist, p.damping, p.damping_max, p.sigma_thresh)
+        # DLS is linear in the twist: split into feed-forward and feedback joint velocities
+        q_ff, smin, lam = dls(J, np.concatenate([v_d, w_d]), p.damping, p.damping_max, p.sigma_thresh)
+        q_fb, _, _ = dls(J, np.concatenate([p.kp_pos * e_pos, p.kp_ori * e_ori]), p.damping, p.damping_max, p.sigma_thresh)
         info["sigma_min"], info["lam"] = smin, lam
+        # time scaling: if the joints cannot follow the planned speed, slow the REFERENCE down
+        # (path preserved) instead of letting the clamp distort the direction
+        if ff > 0:
+            head = 0.9 * self.qdot_max - np.abs(q_fb)
+            need = np.abs(ff * q_ff)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                ratio = np.where(need > 1e-9, np.maximum(head, 0.0) / need, np.inf)
+            sigma = float(np.clip(np.min(ratio), 0.05, 1.0))
+            ff *= sigma
+            info["k"] = k * sigma
+        qdot = ff * q_ff + q_fb
         qdot = limit_qdot(qdot, self.last_qdot, self.qdot_max, p.qddot_max * dt)
 
         # do not drive further into a joint limit
@@ -190,3 +206,38 @@ class TrackingController:
         else:
             self.last_qdot = self.last_qdot * (1.0 - step / mag)
         return self.last_qdot.copy()
+
+
+class StallDetector:
+    """Detects 'commanded but not moving': the robot is blocked (e.g. the probe pressing on
+    the wire). HEAL keeps trying and, when the joint finally slips, trips its own
+    'Large Velocity for Joint' safety error. Stop BEFORE that happens.
+
+    update() returns (True, joint_index) when, over the last `window` seconds, some joint was
+    commanded to move at least `min_expected` rad but actually moved less than `ratio` of that.
+    """
+
+    def __init__(self, window: float = 0.6, min_expected: float = 0.012, ratio: float = 0.3):
+        from collections import deque
+        self.window, self.min_expected, self.ratio = window, min_expected, ratio
+        self.buf = deque()
+
+    def reset(self):
+        self.buf.clear()
+
+    def update(self, t: float, q: np.ndarray, cmd_sent: np.ndarray):
+        self.buf.append((t, np.asarray(q, float).copy(), np.asarray(cmd_sent, float).copy()))
+        while self.buf and t - self.buf[0][0] > self.window:
+            self.buf.popleft()
+        if len(self.buf) < 5 or t - self.buf[0][0] < 0.8 * self.window:
+            return False, None
+        ts = np.array([b[0] for b in self.buf])
+        C = np.array([b[2] for b in self.buf])
+        expected = np.sum(C[:-1] * np.diff(ts)[:, None], axis=0)
+        actual = self.buf[-1][1] - self.buf[0][1]
+        j = int(np.argmax(np.abs(expected)))
+        if abs(expected[j]) < self.min_expected:
+            return False, None
+        if actual[j] * np.sign(expected[j]) < self.ratio * abs(expected[j]):
+            return True, j
+        return False, None

@@ -29,13 +29,15 @@ def main():
     ap.add_argument("--smooth", type=float, default=None, help="path smoothing sigma [m]")
     ap.add_argument("--offset", type=float, nargs=3, default=None, help="clearance offset xyz [m]")
     ap.add_argument("--trim", type=float, default=None, help="cut this arc length [m] from both ends")
+    ap.add_argument("--interp", choices=["linear", "spline"], default=None,
+                    help="spline for a few sparse SPACE waypoints, linear (default) for recorded demos")
     ap.add_argument("--no-plot", action="store_true")
     a = ap.parse_args()
 
     cfg = load_config(a.config)
     p = process_params(cfg, v_max=a.vmax, a_max=a.amax, a_lat_max=a.alat, w_max=a.wmax,
                        smooth_sigma=a.smooth, offset_xyz=tuple(a.offset) if a.offset else None,
-                       trim_start_end=a.trim)
+                       trim_start_end=a.trim, raw_interp=a.interp)
     demo = Demo.load(a.demo)
     traj = process_demo(demo, p)
     base = os.path.splitext(os.path.basename(a.demo))[0]

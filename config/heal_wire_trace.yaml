@@ -5,17 +5,29 @@
 
 robot:
   base_link: base_link
-  tip_link: end-effector              # flange frame name in HEAL URDF (from starter code)
+  tip_link: rq_tool_tip               # Robotiq-85 tool tip (point between the fingertips) in the HEAL URDF
+                                      # (flange = end-effector; the lab launch file builds both chains)
   joint_names: [joint1, joint2, joint3, joint4, joint5, joint6]   # order expected by velocity controller
   joint_state_topic: /joint_states
   robot_description_topic: /robot_description
   velocity_command_topic: /velocity_controller/commands
-  # Probe tip relative to the tip_link frame (metres / radians).          # MEASURE
-  # e.g. a ring 12 cm out along the flange z axis -> [0, 0, 0.12]
-  tool_xyz: [0.0, 0.0, 0.0]
+  # Ring CENTRE relative to the tip_link frame (metres / radians).        # MEASURE
+  # = from the point between the fingertips to the ring centre, usually only along z
+  # (straight out of the gripper), e.g. ring centre 9 cm beyond the fingertips -> [0, 0, 0.09].
+  # scripts/check_setup.py prints the rq_tool_tip axes to confirm which way z points.
+  # SIDE LAYOUT (docs/ROOT_CAUSE_ANALYSIS.md): probe handle held STRAIGHT OUT of the gripper
+  # (coaxial with joint 6), ring centre 8 cm beyond the fingertips. Controlled frame z = handle
+  # = gripper axis, so the ring roll is joint 6 alone (teleop n/m, [ ], --auto-roll).   # MEASURE the 8 cm
+  tool_xyz: [0.0, 0.0, 0.08]
   tool_rpy: [0.0, 0.0, 0.0]
   rate_hz: 100.0                      # control loop rate (starter code used 100 Hz)
   joint_state_timeout: 0.1            # s, stop if joint_states go stale
+  # Hard cap on EVERY joint-velocity command any script sends [rad/s].
+  # HEAL stopped with "Safety error : Large Velocity for Joint" during a 0.4 rad/s wrist roll.
+  # Keep 0.25 until the TA tells us HEAL's safety threshold.
+  # Both safety stops happened while the WRIST was turning (joint 6 at <= 0.12 rad/s), so the
+  # wrist joints get a lower cap. Per joint [rad/s]: joint1..joint6
+  qdot_hard_limit: [0.25, 0.25, 0.25, 0.10, 0.10, 0.15]
 
 recording:
   rate_hz: 50.0                       # brief says >= 10-20 Hz, denser is better
@@ -33,7 +45,8 @@ processing:
   v_max: 0.05                         # m/s - brief: start 5-10 cm/s, increase gradually
   a_max: 0.10
   a_lat_max: 0.10
-  w_max: 0.5
+  w_max: 0.15                         # rad/s probe roll speed (= joint 6 in the side layout)
+  alpha_max: 0.5                      # rad/s^2 probe roll acceleration
   profile_smooth: 0.01
   curvature_sigma: 0.008
   dt: 0.01
@@ -46,8 +59,8 @@ controller:
   damping: 0.02
   damping_max: 0.10
   sigma_thresh: 0.04
-  qdot_max: [0.6, 0.6, 0.6, 0.8, 0.8, 0.8]   # rad/s  (keep <= HEAL limits)  # MEASURE / ask TA
-  qddot_max: 3.0
+  qdot_max: [0.25, 0.25, 0.25, 0.10, 0.10, 0.15]   # rad/s, <= robot.qdot_hard_limit  # ask TA for HEAL's safety limit
+  qddot_max: 1.0                      # rad/s^2 - gentle ramps (HEAL safety)
   qddot_stop: 3.0
   speed_scale: 0.1                    # ALWAYS start at 0.1 (10 %) - override with --speed
   err_soft: 0.0015
@@ -55,6 +68,7 @@ controller:
   lag_soft: 0.010
   lag_abort: 0.030
   ori_err_abort: 0.20
+  ori_err_soft: 0.05
   k_min: 0.2
   start_tol: 0.005
   done_tol: 0.0015

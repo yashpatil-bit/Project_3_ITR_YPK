@@ -1,0 +1,11 @@
+[
+{"name": "joint1", "type": "revolute", "xyz": [0.0, 0.0, 0.0], "rpy": [0.0, 0.0, 0.0], "axis": [0.0, 0.0, 1.0], "lower": -3.141592653589793, "upper": 3.141592653589793, "velocity": 3.0},
+{"name": "joint2", "type": "revolute", "xyz": [0.0, 0.0, 0.346], "rpy": [0.0, 0.0, 0.0], "axis": [-1.0, 0.0, 0.0], "lower": -0.75, "upper": 2.05, "velocity": 1.0},
+{"name": "joint3", "type": "revolute", "xyz": [0.0, 0.0, 0.305], "rpy": [0.0, 0.0, 0.0], "axis": [1.0, 0.0, 0.0], "lower": -1.0, "upper": 1.0, "velocity": 5.0},
+{"name": "joint4", "type": "revolute", "xyz": [-0.000913, 0.36813, 0.0], "rpy": [0.0, 0.0, 0.0], "axis": [0.0, 1.0, 0.0], "lower": -3.141592653589793, "upper": 3.141592653589793, "velocity": 1.0},
+{"name": "joint5", "type": "revolute", "xyz": [0.0, 0.0, 0.0], "rpy": [0.0, 0.0, 0.0], "axis": [0.5, 0.86603, 0.0], "lower": -3.141592653589793, "upper": 3.141592653589793, "velocity": 1.0},
+{"name": "joint6", "type": "revolute", "xyz": [0.0, 0.0, -0.0975], "rpy": [0.0, 0.0, 0.0], "axis": [0.0, 0.0, -1.0], "lower": -3.141592653589793, "upper": 3.141592653589793, "velocity": 1.0},
+{"name": "rq_mount_joint", "type": "fixed", "xyz": [0.0, 0.0, -0.055], "rpy": [0.0, 0.0, 0.0], "axis": null, "lower": null, "upper": null, "velocity": null},
+{"name": "rq_robotiq_85_base_joint", "type": "fixed", "xyz": [0.0, 0.0, 0.0], "rpy": [3.141593, 0.0, -1.765], "axis": null, "lower": null, "upper": null, "velocity": null},
+{"name": "rq_tool_tip_joint", "type": "fixed", "xyz": [0.0, 0.0, 0.15], "rpy": [0.0, 0.0, 0.0], "axis": null, "lower": null, "upper": null, "velocity": null}
+]
