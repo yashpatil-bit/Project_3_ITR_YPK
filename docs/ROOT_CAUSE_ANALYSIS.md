@@ -97,3 +97,16 @@ swings into the wire (reason c is gone). Moving along the wire is just shoulder 
 - Teaching: `teleop_teach.py --name demo_side --auto-roll`.
   - **`a`/`d` = along the wire, `r`/`f` = up/down.** Never `w`/`s` (toward the wire).
   - The ring rolls by itself (joint 6). `n`/`m` or `[`/`]` correct it by hand.
+
+## 6. Verification: full replay simulated on HEAL's model (speed caps, stall detector, 30 ms robot lag)
+
+| Stand | Margin | sigma_min | Replay at speed 1.0 | Max path error | Peak joint speed (cap) |
+|---|---|---|---|---|---|
+| **RIGHT side** (recommended) | **18°** | 0.108 | completed, 112 s, no stall | 0.62 mm | j2 0.18 (0.25), j3 0.16 (0.25), j6 0.135 (0.15) |
+| Left side, centre 45 cm | 8° | 0.087 | completed, 116 s | 0.60 mm | similar |
+| Left side, centre 40 cm | 15° | 0.125 | — | — | — |
+
+The other group's layout (wire facing the robot, handle straight out, gripper horizontal) was
+re-checked with 250 IK seeds per variant: only 2 of 25 variants are feasible (65 cm, 22 cm high).
+That's the edge of HEAL's workspace, because the gripper cannot point along the forearm (2a).
+The side layout uses the **same grip**, with the stand beside the arm instead.
