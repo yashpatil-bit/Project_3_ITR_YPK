@@ -25,7 +25,9 @@ robot:
   # Hard cap on EVERY joint-velocity command any script sends [rad/s].
   # HEAL stopped with "Safety error : Large Velocity for Joint" during a 0.4 rad/s wrist roll.
   # Keep 0.25 until the TA tells us HEAL's safety threshold.
-  qdot_hard_limit: 0.25
+  # Both safety stops happened while the WRIST was turning (joint 6 at <= 0.12 rad/s), so the
+  # wrist joints get a lower cap. Per joint [rad/s]: joint1..joint6
+  qdot_hard_limit: [0.25, 0.25, 0.25, 0.10, 0.10, 0.06]
 
 recording:
   rate_hz: 50.0                       # brief says >= 10-20 Hz, denser is better
@@ -43,8 +45,8 @@ processing:
   v_max: 0.05                         # m/s - brief: start 5-10 cm/s, increase gradually
   a_max: 0.10
   a_lat_max: 0.10
-  w_max: 0.5                          # rad/s probe roll speed - ring rolls ~180 deg per U-bend
-  alpha_max: 2.0                      # rad/s^2 probe roll acceleration
+  w_max: 0.10                         # rad/s probe roll speed (HEAL wrist safety: keep low)
+  alpha_max: 0.5                      # rad/s^2 probe roll acceleration
   profile_smooth: 0.01
   curvature_sigma: 0.008
   dt: 0.01
@@ -57,7 +59,7 @@ controller:
   damping: 0.02
   damping_max: 0.10
   sigma_thresh: 0.04
-  qdot_max: [0.25, 0.25, 0.25, 0.25, 0.25, 0.25]   # rad/s, <= robot.qdot_hard_limit  # ask TA for HEAL's safety limit
+  qdot_max: [0.25, 0.25, 0.25, 0.10, 0.10, 0.06]   # rad/s, <= robot.qdot_hard_limit  # ask TA for HEAL's safety limit
   qddot_max: 1.0                      # rad/s^2 - gentle ramps (HEAL safety)
   qddot_stop: 3.0
   speed_scale: 0.1                    # ALWAYS start at 0.1 (10 %) - override with --speed

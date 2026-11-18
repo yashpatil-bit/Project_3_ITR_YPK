@@ -117,10 +117,10 @@ class RobotIO:
         if self.pub is None:
             return
         qdot_chain = np.asarray(qdot_chain, dtype=float)
-        lim = float(self.cfg["robot"].get("qdot_hard_limit", 0.25))
-        peak = float(np.max(np.abs(qdot_chain))) if qdot_chain.size else 0.0
-        if peak > lim:
-            qdot_chain = qdot_chain * (lim / peak)
+        lim = np.resize(np.asarray(self.cfg["robot"].get("qdot_hard_limit", 0.25), dtype=float), qdot_chain.size)
+        ratio = float(np.max(np.abs(qdot_chain) / lim)) if qdot_chain.size else 0.0
+        if ratio > 1.0:
+            qdot_chain = qdot_chain / ratio          # per-joint limits, direction preserving
             self.n_clamped += 1
         self.cmd_log.append((time.monotonic(), *qdot_chain.tolist()))
         if len(self.cmd_log) > 200000:

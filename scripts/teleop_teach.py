@@ -69,7 +69,7 @@ def main():
     dt = 1.0 / float(cfg["robot"]["rate_hz"])
     si = 1
     kp_lin, kp_ang = 3.0, 3.0
-    v_cap, w_cap = 0.01, 0.10                 # m/s, rad/s (HEAL safety trips on fast joints)
+    v_cap, w_cap = 0.01, 0.05                 # m/s, rad/s (HEAL safety trips on fast wrist motion)
     last = np.zeros(io.kin.n)
     qdot_max = np.full(io.kin.n, 0.15)
     T, Q, P, R = [], [], [], []
@@ -175,8 +175,8 @@ def main():
                 err = joint_goal - q
                 cmd = 1.5 * err
                 peak = float(np.max(np.abs(cmd)))
-                if peak > 0.12:
-                    cmd *= 0.12 / peak
+                if peak > 0.06:
+                    cmd *= 0.06 / peak
                 smin = 1.0
                 p_t, q_t = p.copy(), qq.copy()
                 if float(np.max(np.abs(err))) < 0.004:
