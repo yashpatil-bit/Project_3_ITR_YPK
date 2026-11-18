@@ -16,6 +16,7 @@ of the robot, so the arm stops within ~2 steps after you let go.
                                           (probe must be OFF the wire / gripper open! any key cancels)
    1/2 : smaller/bigger steps     (0.5 / 1 / 2 / 5 mm  and  1 / 2 / 5 / 10 deg)
    c   : start/stop continuous RECORDING (20 Hz)  -> use this to teach the whole wire
+   --auto-roll : the ring turns BY ITSELF to follow your direction of motion (recommended)
    SPACE : add a single waypoint
    h   : hold (cancel pending steps, stop where you are)
    q   : save + quit      x : quit WITHOUT saving
@@ -62,6 +63,11 @@ def main():
     ap.add_argument("--name", default=time.strftime("teleop_%Y%m%d_%H%M%S"))
     ap.add_argument("--config", default=None)
     ap.add_argument("--urdf", default=None)
+    ap.add_argument("--auto-roll", action="store_true",
+                    help="turn the ring automatically (about the handle axis) so it stays perpendicular to the "
+                         "direction you are moving -> you only steer with the movement keys in the corners")
+    ap.add_argument("--roll-tol", type=float, default=20.0,
+                    help="auto-roll: start turning when the ring is this many degrees off perpendicular")
     a = ap.parse_args()
     cfg = load_config(a.config)
     rclpy.init()
@@ -85,6 +91,7 @@ def main():
     last_warn = 0.0
     joint_goal = None                         # joint-space goal (joint-6 jog or go-home) [rad]
     stall = StallDetector()
+    trail = []                                # recent target positions (auto-roll)
     last_g = -10.0
     old = termios.tcgetattr(sys.stdin)
     save = True
@@ -159,6 +166,7 @@ def main():
                     ax, sg = LIN[c]
                     if np.linalg.norm(p_t - p) < 2.0 * step:          # don't run ahead of the robot
                         p_t = p_t.copy(); p_t[ax] += sg * step
+                        trail.append(p_t.copy())
                 elif c in ANG or c in ROLL or c in "[]":
                     if np.linalg.norm(quat_error(q_t, qq)) < 2.0 * ang:
                         if c in ANG:
@@ -171,6 +179,24 @@ def main():
                             axv = axv * (1.0 if c == "]" else -1.0)
                         q_t = quat_normalize(quat_mul(quat_exp(axv * ang), q_t))
 
+            # ---- auto-roll: keep the ring normal along the recent direction of motion ----------
+            if a.auto_roll and len(trail) >= 2:
+                while len(trail) > 2 and np.linalg.norm(trail[-1] - trail[0]) > 0.006:
+                    trail.pop(0)
+                mv = trail[-1] - trail[0]
+                Rt = quat_to_rotmat(q_t)
+                hax = Rt[:, 2]                                  # handle axis (roll axis)
+                mv = mv - hax * float(mv @ hax)                 # motion within the plane of the ring normal
+                if np.linalg.norm(mv) > 0.003:
+                    n_now = Rt[:, 0]                            # ring normal
+                    d = mv / np.linalg.norm(mv)
+                    if float(d @ n_now) < 0:
+                        d = -d                                  # a ring has no front/back
+                    ang_err = float(np.arctan2(np.cross(n_now, d) @ hax, n_now @ d))
+                    if abs(ang_err) > np.radians(a.roll_tol) and np.linalg.norm(quat_error(q_t, qq)) < np.radians(6):
+                        stepr = float(np.clip(ang_err - np.sign(ang_err) * np.radians(a.roll_tol) * 0.5,
+                                              -np.radians(3), np.radians(3)))
+                        q_t = quat_normalize(quat_mul(quat_exp(hax * stepr), q_t))
             e_lin = p_t - p
             e_ang = quat_error(q_t, qq)
             v = kp_lin * e_lin
