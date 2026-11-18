@@ -59,5 +59,41 @@ On top of that, keyboard teaching asked a person to translate and roll **at the 
 4. **Plan moves with the box in mind:** approach from above (`move_joints --approach`), start at
    the **top** of the wire, and keep the box away until the arm is in place.
 
-## 4. Simulation of the layouts (real HEAL kinematics)
-(see the table filled in below)
+## 4. Simulation of the layouts (real HEAL kinematics, whole wire traced, ring kept within 40° of perpendicular)
+
+| Layout | Feasible | Joint margin | sigma_min | Joints moving along the wire |
+|---|---|---|---|---|
+| Crosswise grip, wire facing the robot (taught today) | yes | 39° | 0.061 | **all six**: the arm swings around the ring at every corner |
+| Straight-out grip, wire facing the robot | barely | 4° | 0.044 | — |
+| Straight-out grip, wire running toward the robot, centred | barely | 7–8° | 0.064 | — |
+| **SIDE LAYOUT: straight-out grip, gripper pointing sideways, wire beside the arm** | **93/288 variants** | **18–25°** | **0.11–0.19** | **joints 2, 3 and 6 only.** Joint 1 = 0°, joint 4 = ∓90°, joint 5 = 0° stay constant |
+
+Why the side layout works: the arm reaches straight forward (joint 1 = 0) and the gripper points 90°
+sideways. That is **always perpendicular to the forearm**, so reason (a) never bites. The handle is
+coaxial with joint 6, so **rolling the ring is joint 6 alone**: the ring turns in place and nothing
+swings into the wire (reason c is gone). Moving along the wire is just shoulder and elbow
+(joints 2, 3) in a vertical plane.
+
+## 5. The side layout in the lab
+
+```
+        (top view)            wire stand, wire running AWAY from the robot
+                                   |<- 38 cm ->|
+     robot base  O ---- arm reaches straight ahead (+y) ----
+                              gripper ==== handle ==== ring  on the wire
+                                     (points sideways)
+```
+- Wire **plane vertical and parallel to the arm's reach direction**, about **38 cm to the side** of
+  the line the arm reaches along (measured from that line to the wire).
+- The end of the wire nearest the robot is about **30 cm** in front of the base axis; the wire
+  centre is about **45 cm**. The box stays at its current height (wire centre about 22 cm).
+- Board orientation: the edge **closest to the wire faces the robot's reach line**, so the gripper
+  isn't above the board.
+- Grip: handle **straight out of the fingers**, gripped near its end; ring centre about 8 cm beyond the
+  fingertips (`robot.tool_xyz: [0, 0, 0.08]`; measure and correct).
+- Start pose, ring at the top of the leg nearest the robot. The path from home stays ≥ 23 cm above the platform:
+  - stand on the **RIGHT** (+x): `move_joints.py --deg 0.3 32.5 -32.4 -89.5 -0.2 -36.2 --approach 0.10`
+  - stand on the **LEFT** (−x): `move_joints.py --deg -0.6 32.5 -32.4 89.9 -0.5 14.0 --approach 0.10` (sigma 0.19, margin 25°)
+- Teaching: `teleop_teach.py --name demo_side --auto-roll`.
+  - **`a`/`d` = along the wire, `r`/`f` = up/down.** Never `w`/`s` (toward the wire).
+  - The ring rolls by itself (joint 6). `n`/`m` or `[`/`]` correct it by hand.
