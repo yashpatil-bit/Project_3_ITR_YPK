@@ -1,5 +1,9 @@
 # Lab status: findings so far and where we are
 
+> **Historical notes from the first lab session.** The crosswise grip described here was later
+> found to be the cause of the corner failures. Current status, failure analysis and plan: see
+> `README.md` (§3–§6) and `docs/HEAL_Wire_Trace_Lab_Guide.pdf`.
+
 ## What we learned on the real robot
 
 | Finding | Consequence / what we changed |
