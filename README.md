@@ -179,8 +179,8 @@ Seen from the robot, the wire direction turns through **180°** over every U (up
 The ring has to stay roughly perpendicular to the wire. For **any fixed ring orientation**, at
 every second corner the wire would run edge-on through the ring: 88° misalignment in our
 simulation. So the ring must roll about 90° at every top and bottom of every U, about an axis
-perpendicular to the wire plane. That's 7 corners with a 3 cm ring on a 3–4 mm wire, so only
-about ±13 mm of clearance.
+perpendicular to the wire plane. That's 7 corners, each needing a roll while the ring (about 3 cm, on a 3–4 mm
+wire) stays clear of the wire.
 
 ### 4.3 With our grip, "roll the ring" meant "swing the whole arm"
 We held the handle **across** the fingers, because that was the only feasible grip in our layout
@@ -189,7 +189,7 @@ ring, about 30 cm from the wrist:
 - the wrist has to travel about ±20 cm sideways while **all six joints** move;
 - the intuitive key (`[`/`]`, joint 6) did the wrong rotation: it **swung the handle like a clock
   hand**;
-- at 8 cm, 3–4° of joint 6 moves the ring about 5 mm, which is the entire clearance.
+- at 8 cm, 3–4° of joint 6 moves the ring about 5 mm sideways, enough to bring it into contact.
 
 That is exactly events 11 and 12. HEAL reports a joint that is jammed and then slips as
 **"Large Velocity for Joint"**. Our own command log proves our commands were small and smooth:
