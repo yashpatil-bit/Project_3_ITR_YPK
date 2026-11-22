@@ -10,18 +10,18 @@ probe), and, if there are three of you, a **Recorder** (writes notes and films).
 ---
 
 ## Before the first session (at home, about 1 h)
-- `pip3 install -r requirements.txt && python3 -m pytest -q`, which should end with `15 passed`.
+- `pip3 install -r requirements.txt && ./run_tests.sh`, which should end with `17 passed`.
 - Run the fake-robot rehearsal from README §8 so everyone has typed every command once.
 - Bring: a ruler or caliper, tape, a laptop with the repo, and a phone for video.
 - Prepare the questions for the TA (bottom of this page).
 
 ## Session 1: bring-up and the big unknowns (about 1 h)
-1. Start the robot (README "Robot bring-up") with `./heal_server` and the velocity controller.
+1. Launch HEAL with **only** the starter README commands (README §2 "Launching HEAL"): step 4 `./heal_server`, then step 5.
 2. `python3 scripts/check_setup.py`
    - KDL chain OK? Joint names match? If `tip_link` is wrong, run `ros2 run tf2_tools view_frames`
      and fix `robot.tip_link`.
    - Is the `effort` field present? (It decides whether `contact_monitor --mode effort` can work.)
-3. **Most important test:** stop `heal_server`, start `./free_drive`, and run
+3. **Most important test:** switch modes (README §2: stop step 5, stop `./heal_server`, run `./free_drive`), then run
    `python3 scripts/check_setup.py --watch` in T2. Move the arm by hand.
    - The pose changes → teaching by hand works. ✅
    - "Timed out waiting for JointState" → `free_drive` does not publish ROS joint states. Ask the

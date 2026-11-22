@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """REPLAY / EXECUTE phase: track a processed trajectory with DLS-IK joint-velocity control.
 
-Prerequisites (see README): ./heal_server running, velocity controller launched, robot at
+Prerequisites: HEAL launched with the starter README commands (README §2): ./heal_server + the
+velocity_control launch (step 5). Robot at
 the trajectory start (scripts/go_to_start.py). Buddy on the E-stop.
 
     python3 scripts/replay.py data/processed/demo_01_v5.npz --dry-run      # robot does NOT move
@@ -26,7 +27,7 @@ from rclpy.node import Node
 from std_msgs.msg import Bool
 
 from wire_trace.config import controller_params, data_dir, load_config
-from wire_trace.controller import TrackingController
+from wire_trace.controller import StallDetector, TrackingController
 from wire_trace.plotting import plot_run
 from wire_trace.ros_common import RobotIO, confirm
 from wire_trace.runlog import RunLog
@@ -98,6 +99,8 @@ def main():
 
         t0 = time.monotonic()
         t_run0["t"] = t0
+        stall = StallDetector()
+        last_sent = np.zeros(io.kin.n)
         next_tick = t0
         status = "running"
         while rclpy.ok():
@@ -133,7 +136,12 @@ def main():
             if a.dry_run:
                 q_virtual = q_virtual + r.qdot * dt
             else:
+                blocked, bj = stall.update(now - t0, q, last_sent)
+                if blocked:
+                    status, reason = "abort", f"robot blocked: joint {bj + 1} not moving as commanded (contact?)"
+                    break
                 io.publish_qdot(r.qdot)
+                last_sent = r.qdot
     except KeyboardInterrupt:
         status, reason = "abort", "Ctrl-C"
     except RuntimeError as e:
@@ -149,6 +157,9 @@ def main():
                     break
         if not a.dry_run:
             io.publish_zero(10)
+            io.save_cmd_log(data_dir("runs", f"{a.tag}_{time.strftime('%Y%m%d_%H%M%S')}_cmds.npy"))
+            if io.n_clamped:
+                print(f"NOTE: {io.n_clamped} commands were capped at robot.qdot_hard_limit")
         t_end = log.rows["t"][-1] if log.rows["t"] else 0.0
         log.contacts = contacts
         log.meta.update(status=status, reason=reason)

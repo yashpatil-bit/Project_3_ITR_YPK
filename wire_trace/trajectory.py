@@ -183,6 +183,7 @@ class ProcessParams:
     a_max: float = 0.10              # m/s^2 tangential
     a_lat_max: float = 0.10          # m/s^2 centripetal -> slows down in tight bends
     w_max: float = 0.5               # rad/s orientation rate limit
+    alpha_max: float = 2.0           # rad/s^2 orientation acceleration limit (ring roll in U-bends)
     profile_smooth: float = 0.01     # m, smoothing of the speed profile (reduces jerk)
     curvature_sigma: float = 0.008   # m, curvature for speed planning is computed on a path
                                      #    smoothed this much (ignores hand tremor; geometry untouched)
@@ -230,10 +231,12 @@ def speed_profile(s: np.ndarray, kappa: np.ndarray, dtheta_ds: np.ndarray, p: Pr
     v[0] = 0.0
     v[-1] = 0.0
     ds = np.diff(s)
+    # path acceleration also limited so the orientation does not accelerate faster than alpha_max
+    acc = np.minimum(p.a_max, p.alpha_max / np.maximum(np.abs(dtheta_ds), 1e-9))
     for i in range(1, len(s)):                       # forward (accel)
-        v[i] = min(v[i], np.sqrt(v[i - 1] ** 2 + 2 * p.a_max * ds[i - 1]))
+        v[i] = min(v[i], np.sqrt(v[i - 1] ** 2 + 2 * acc[i - 1] * ds[i - 1]))
     for i in range(len(s) - 2, -1, -1):              # backward (decel)
-        v[i] = min(v[i], np.sqrt(v[i + 1] ** 2 + 2 * p.a_max * ds[i]))
+        v[i] = min(v[i], np.sqrt(v[i + 1] ** 2 + 2 * acc[i] * ds[i]))
     return v
 
 

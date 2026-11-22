@@ -11,7 +11,7 @@ Use it to rehearse the full command sequence at home and to smoke-test code chan
 
     python3 tools/fake_robot.py --make-demo                      # synthetic demo -> data/demos/sim_demo.npz
     python3 scripts/process_demo.py data/demos/sim_demo.npz --vmax 0.1
-    python3 tools/fake_robot.py scripts/go_to_start.py data/processed/sim_demo_v10.npz --yes
+    python3 tools/fake_robot.py scripts/go_to_start.py data/processed/sim_demo_v10.npz --yes --max-dist 0.5
     python3 tools/fake_robot.py scripts/replay.py data/processed/sim_demo_v10.npz --speed 0.5 --yes
 
 The simulated arm state is persisted in data/sim/fake_robot_state.npy between calls,
@@ -270,6 +270,9 @@ def install():
 
         def jacobian(self, q):
             return WORLD.arm.jacobian(np.asarray(q, float))
+
+        def frame_positions(self, q):
+            return np.array([T[:3, 3] for T in WORLD.arm.frames(np.asarray(q, float))[1:]])
 
     kdl_mod.KDLKinematics = KDLKinematics
     sys.modules["wire_trace.kdl_kinematics"] = kdl_mod

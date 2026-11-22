@@ -40,6 +40,8 @@ class RobotIO:
         node.create_subscription(JointState, r["joint_state_topic"], self._js_cb, qos_profile_sensor_data)
         self._urdf_sub = node.create_subscription(String, r["robot_description_topic"], self._urdf_cb, LATCHED_QOS)
         self.pub = node.create_publisher(Float64MultiArray, r["velocity_command_topic"], 1) if need_command else None
+        self.cmd_log: list = []
+        self.n_clamped = 0
 
     # -- callbacks --------------------------------------------------------
     def _js_cb(self, msg: JointState):
@@ -68,6 +70,9 @@ class RobotIO:
         r = self.cfg["robot"]
         self.kin = KDLKinematics(self._urdf, r["base_link"], r["tip_link"],
                                  r.get("tool_xyz", [0, 0, 0]), r.get("tool_rpy", [0, 0, 0]))
+        if self.readings_fake():
+            raise RuntimeError("all joints read exactly 0.0 - HEAL is probably in an ERROR state (fake readings). "
+                               "Restart: ./base_rigid (go home), ./heal_server, then the velocity launch. See INSTRUCTIONS H.")
         missing = [n for n in self.kin.joint_names if n not in self._js.name]
         if missing:
             raise RuntimeError(f"KDL joints {missing} not present in /joint_states names {list(self._js.name)}")
@@ -76,8 +81,18 @@ class RobotIO:
             raise RuntimeError(f"config robot.joint_names {bad} not in KDL chain {self.kin.joint_names}")
 
     # -- state ------------------------------------------------------------
+    def readings_fake(self) -> bool:
+        """True if every joint reads EXACTLY 0.0. HEAL publishes that after a robot error, even
+        though the arm is somewhere else. Real encoder readings at home are never exactly 0."""
+        js = self._js
+        return js is not None and len(js.position) > 0 and all(float(v) == 0.0 for v in js.position)
+
     def stale(self) -> bool:
-        return self._js is None or (time.monotonic() - self._js_wall) > self.timeout
+        """True if joint states are old OR look like the fake all-zero readings of an error state.
+        Every moving script stops when this is True."""
+        if self._js is None or (time.monotonic() - self._js_wall) > self.timeout:
+            return True
+        return self.readings_fake()
 
     def q(self) -> np.ndarray:
         """Joint positions in KDL chain order."""
@@ -93,13 +108,32 @@ class RobotIO:
         return np.array([js.effort[idx[n]] for n in self.kin.joint_names], float)
 
     def publish_qdot(self, qdot_chain: np.ndarray) -> None:
-        """qdot in KDL chain order -> Float64MultiArray in robot.joint_names order."""
+        """qdot in KDL chain order -> Float64MultiArray in robot.joint_names order.
+
+        Last line of defence: every joint is limited to robot.qdot_hard_limit (direction
+        preserving), whatever the calling script asked for. HEAL's own safety stops the robot
+        with "Large Velocity for Joint" above its threshold.
+        """
         if self.pub is None:
             return
+        qdot_chain = np.asarray(qdot_chain, dtype=float)
+        lim = np.resize(np.asarray(self.cfg["robot"].get("qdot_hard_limit", 0.25), dtype=float), qdot_chain.size)
+        ratio = float(np.max(np.abs(qdot_chain) / lim)) if qdot_chain.size else 0.0
+        if ratio > 1.0:
+            qdot_chain = qdot_chain / ratio          # per-joint limits, direction preserving
+            self.n_clamped += 1
+        self.cmd_log.append((time.monotonic(), *qdot_chain.tolist()))
+        if len(self.cmd_log) > 200000:
+            self.cmd_log = self.cmd_log[-100000:]
         cidx = {n: i for i, n in enumerate(self.kin.joint_names)}
         msg = Float64MultiArray()
         msg.data = [float(qdot_chain[cidx[n]]) for n in self.cmd_names]
         self.pub.publish(msg)
+
+    def save_cmd_log(self, path: str) -> None:
+        """Save every published joint-velocity command (t, qdot...) for debugging."""
+        if self.cmd_log:
+            np.save(path, np.array(self.cmd_log))
 
     def publish_zero(self, repeats: int = 5) -> None:
         if self.pub is None:
