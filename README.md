@@ -5,6 +5,9 @@ Goal of the task: guide a ring probe held by the HEAL arm along a vertical, bent
 a demonstration and replays it under joint-velocity control (Stage 1), and optionally gets better
 over trials (Stage 2).
 
+**▶ Video (2:25): [https://youtu.be/1M2F7j3zTKM](https://youtu.be/1M2F7j3zTKM)**: the setup, keyboard teaching, the corner where every attempt
+failed, and why (lab clips with captions, idle parts sped up).
+
 > ## Status: not completed on the real robot
 > - **Software: complete and tested.**
 >   - Stage 1 pipeline: teach → record → process → DLS-IK velocity replay → evaluation.
@@ -57,7 +60,7 @@ over trials (Stage 2).
 | 3 repeatable runs and evaluation | ❌ **Not done** (needs a demo first); evaluation script ready | `scripts/evaluate_runs.py` |
 | Safety checklist and E-stop procedure | ✅ Done, and used for real (E-stop pressed several times) | §10 |
 | Stage 2 learning (bonus) | ✅ Code done; ILC tested in simulation; ❌ not on the robot | §9.4 |
-| Video (≤ 3 min) | ❌ Not done; there is no successful run to show | — |
+| Video (≤ 3 min) | ✅ Done (2:25): shows the setup, teaching and the failure at the corner, not a successful run | [https://youtu.be/1M2F7j3zTKM](https://youtu.be/1M2F7j3zTKM) |
 | Explanation of the failure and a way forward | ✅ This README, `docs/ROOT_CAUSE_ANALYSIS.md` | §3–§6 |
 
 ---
@@ -287,7 +290,7 @@ step it is in **[`docs/HEAL_Wire_Trace_Lab_Guide.pdf`](docs/HEAL_Wire_Trace_Lab_
 5. Run `process_demo.py`, then dry run → reverse at 0.3 → forward at 0.3 → 1.0.
 6. Do 3 × `replay.py --tag final` (with `--reverse` back), then `evaluate_runs.py --tag final`.
 7. Optional: ILC iterations (Stage 2).
-8. Fill in the results table and the video link below.
+8. Fill in the results table below and record a new video of the successful runs.
 
 ### Results
 
@@ -300,7 +303,7 @@ step it is in **[`docs/HEAL_Wire_Trace_Lab_Guide.pdf`](docs/HEAL_Wire_Trace_Lab_
 Simulation only: side layout 112 s, 0.62 mm (§5). ILC on the simulated arm: max error 3.7 → 1.2 mm
 in 5 trials (§9.4).
 
-Video: not recorded (no successful run).
+Video of our attempts (no successful run): [https://youtu.be/1M2F7j3zTKM](https://youtu.be/1M2F7j3zTKM)
 
 ---
 
